@@ -26,7 +26,7 @@ export default function Picks() {
 
   useEffect(() => {
     fetchPicks();
-    const interval = setInterval(fetchPicks, 5 * 60 * 1000); // Auto-refresh every 5min
+    const interval = setInterval(fetchPicks, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -45,10 +45,10 @@ export default function Picks() {
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
         >
-          <Loader2 className="w-10 h-10 text-[#895af6]" />
+          <Loader2 className="w-10 h-10 text-[#5E5CE6]" />
         </motion.div>
-        <p className="text-slate-500 font-medium mt-4">Analizando mercados en tiempo real...</p>
-        <p className="text-slate-400 text-sm mt-1">Conectando con API-Sports</p>
+        <p className="text-[#6E6E73] font-medium mt-4">Analizando mercados en tiempo real...</p>
+        <p className="text-[#AEAEB2] text-sm mt-1">Conectando con API-Sports</p>
       </div>
     );
   }
@@ -58,8 +58,8 @@ export default function Picks() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Top Picks</h2>
-          <p className="text-sm text-slate-500 flex items-center gap-1">
+          <h2 className="text-2xl font-bold text-[#1D1D1F]">Top Picks</h2>
+          <p className="text-sm text-[#6E6E73] flex items-center gap-1">
             <TrendingUp className="w-3 h-3" />
             Mejores oportunidades detectadas
           </p>
@@ -67,7 +67,7 @@ export default function Picks() {
         <button
           onClick={fetchPicks}
           disabled={loading}
-          className="p-2 text-[#895af6] hover:bg-[#895af6]/10 rounded-full transition-colors disabled:opacity-50"
+          className="p-2 text-[#5E5CE6] hover:bg-[#EEEEFF] rounded-full transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
         </button>
@@ -80,8 +80,8 @@ export default function Picks() {
           onClick={() => setActiveFilter('all')}
           className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer ${
             activeFilter === 'all' 
-              ? 'bg-[#895af6] text-white shadow-lg shadow-[#895af6]/20' 
-              : 'bg-white text-slate-600 border border-slate-200'
+              ? 'bg-[#5E5CE6] text-white' 
+              : 'bg-white text-[#6E6E73] border border-[#E5E5EA]'
           }`}
         >
           Todos ({picks.length})
@@ -91,8 +91,8 @@ export default function Picks() {
           onClick={() => setActiveFilter('live')}
           className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
             activeFilter === 'live' 
-              ? 'bg-red-500 text-white shadow-lg shadow-red-500/20' 
-              : 'bg-white text-slate-600 border border-slate-200'
+              ? 'bg-[#FF3B30] text-white' 
+              : 'bg-white text-[#6E6E73] border border-[#E5E5EA]'
           }`}
         >
           <Zap className="w-3 h-3" />
@@ -103,8 +103,8 @@ export default function Picks() {
           onClick={() => setActiveFilter('upcoming')}
           className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
             activeFilter === 'upcoming' 
-              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' 
-              : 'bg-white text-slate-600 border border-slate-200'
+              ? 'bg-[#34C759] text-white' 
+              : 'bg-white text-[#6E6E73] border border-[#E5E5EA]'
           }`}
         >
           <Clock className="w-3 h-3" />
@@ -113,7 +113,7 @@ export default function Picks() {
       </div>
 
       {/* Last Update */}
-      <div className="text-xs text-slate-400 flex items-center gap-1">
+      <div className="text-xs text-[#AEAEB2] flex items-center gap-1">
         <Clock className="w-3 h-3" />
         Última actualización: {lastUpdate.toLocaleTimeString('es-ES')}
       </div>
@@ -130,11 +130,11 @@ export default function Picks() {
         >
           {filteredPicks.length === 0 ? (
             <div className="text-center py-12">
-              <div className="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Filter className="text-slate-400 w-8 h-8" />
+              <div className="bg-[#F5F5F7] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Filter className="text-[#AEAEB2] w-8 h-8" />
               </div>
-              <p className="text-slate-500">No hay picks disponibles en esta categoría</p>
-              <p className="text-slate-400 text-sm mt-1">Intenta con otro filtro o recarga</p>
+              <p className="text-[#6E6E73]">No hay picks disponibles en esta categoría</p>
+              <p className="text-[#AEAEB2] text-sm mt-1">Intenta con otro filtro o recarga</p>
             </div>
           ) : (
             filteredPicks.map((pick, index) => (
@@ -156,16 +156,12 @@ export default function Picks() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg flex items-center gap-2"
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#1C1C1E] text-white px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2"
         >
-          <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+          <span className="w-2 h-2 bg-[#FF3B30] rounded-full animate-pulse"></span>
           {liveCount} evento{liveCount !== 1 ? 's' : ''} en vivo
         </motion.div>
       )}
     </div>
   );
-}
-
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ');
 }

@@ -23,26 +23,27 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
 
   const getSportColor = (sport: string) => {
     switch (sport.toLowerCase()) {
-      case 'football': return 'from-green-500 to-emerald-600';
-      case 'basketball': return 'from-orange-500 to-red-500';
-      case 'baseball': return 'from-blue-500 to-indigo-600';
-      default: return 'from-purple-500 to-pink-500';
+      case 'football': return '#34C759';
+      case 'basketball': return '#FF9500';
+      case 'baseball': return '#007AFF';
+      default: return '#5E5CE6';
     }
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 9) return 'text-emerald-500';
-    if (confidence >= 7) return 'text-amber-500';
-    return 'text-slate-500';
+    if (confidence >= 9) return '#34C759';
+    if (confidence >= 7) return '#FF9500';
+    return '#6E6E73';
   };
 
   return (
     <>
       <motion.div
         whileHover={{ y: -4 }}
-        className="group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition-all hover:shadow-lg border border-slate-100"
+        className="group flex flex-col overflow-hidden rounded-2xl bg-white transition-all hover:shadow-lg border border-[#E5E5EA]"
+        style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04)' }}
       >
-        <div className="relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900">
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#1C1C1E]">
           {!imageError ? (
             <img
               src={`https://picsum.photos/seed/${encodeURIComponent(pick.matchName)}/800/450`}
@@ -56,14 +57,17 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           
           {/* Sport Badge */}
-          <div className={`absolute top-3 left-3 px-3 py-1 rounded-full bg-gradient-to-r ${getSportColor(pick.sport)} text-white text-xs font-bold flex items-center gap-1 shadow-lg`}>
+          <div 
+            className="absolute top-3 left-3 px-3 py-1 rounded-full text-white text-xs font-bold flex items-center gap-1 shadow-lg"
+            style={{ backgroundColor: getSportColor(pick.sport) }}
+          >
             <span>{getSportEmoji(pick.sport)}</span>
             <span>{pick.sport}</span>
           </div>
 
           {/* Live Badge */}
           {pick.isLive && (
-            <div className="absolute top-3 right-14 px-2 py-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center gap-1 animate-pulse">
+            <div className="absolute top-3 right-14 px-2 py-1 rounded-full bg-[#FF3B30] text-white text-[10px] font-bold flex items-center gap-1 animate-pulse">
               <Zap className="w-3 h-3" />
               LIVE
             </div>
@@ -71,7 +75,7 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
 
           {/* Top Pick Badge */}
           {pick.confidence >= 9 && (
-            <div className="absolute top-3 right-3 rounded-full bg-amber-400 px-2 py-1 text-[10px] font-bold text-amber-900 shadow-lg flex items-center gap-1">
+            <div className="absolute top-3 right-3 rounded-full bg-[#FF9500] px-2 py-1 text-[10px] font-bold text-white shadow-lg flex items-center gap-1">
               <Flame className="w-3 h-3" />
               TOP PICK
             </div>
@@ -88,30 +92,31 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
 
         <div className="flex flex-col p-4">
           <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-emerald-500">
+            <div className="flex items-center gap-1.5" style={{ color: '#34C759' }}>
               <TrendingUp className="w-4 h-4" />
               <span className="text-sm font-bold">+{pick.edgePercent.toFixed(1)}% Edge</span>
             </div>
-            <div className={`flex items-center gap-1 ${getConfidenceColor(pick.confidence)}`}>
+            <div className="flex items-center gap-1" style={{ color: getConfidenceColor(pick.confidence) }}>
               <Verified className="w-4 h-4" />
               <span className="text-sm font-bold">{pick.confidence}/10</span>
             </div>
           </div>
 
           <div className="mb-4 space-y-2">
-            <div className="flex items-center gap-2 text-slate-500 text-sm">
-              <Target className="w-4 h-4 text-[#895af6]" />
-              <span><strong className="text-slate-700">{pick.selection}</strong> @ {pick.bookmaker}</span>
+            <div className="flex items-center gap-2 text-[#6E6E73] text-sm">
+              <Target className="w-4 h-4 text-[#5E5CE6]" />
+              <span><strong className="text-[#1D1D1F]">{pick.selection}</strong> @ {pick.bookmaker}</span>
             </div>
-            <div className="flex items-center gap-2 text-slate-500 text-sm">
-              <Building2 className="w-4 h-4 text-[#895af6]" />
-              <span>Cuota: <strong className="text-slate-700">{pick.odds.toFixed(2)}</strong></span>
+            <div className="flex items-center gap-2 text-[#6E6E73] text-sm">
+              <Building2 className="w-4 h-4 text-[#5E5CE6]" />
+              <span>Cuota: <strong className="text-[#1D1D1F]">{pick.odds.toFixed(2)}</strong></span>
             </div>
           </div>
 
           <button
             onClick={() => setShowModal(true)}
-            className="flex w-full items-center justify-center rounded-xl bg-[#895af6] py-3 text-sm font-bold text-white transition-all active:scale-95 hover:bg-[#7c4df2] shadow-md shadow-[#895af6]/20"
+            className="flex w-full items-center justify-center rounded-xl py-3 text-sm font-bold text-white transition-all active:scale-95"
+            style={{ backgroundColor: '#5E5CE6', boxShadow: '0 2px 8px rgba(94,92,230,0.3)' }}
           >
             <BookOpen className="w-4 h-4 mr-2" />
             Ver Análisis Completo
@@ -138,7 +143,7 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
             >
               <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto">
                 {/* Header */}
-                <div className={`bg-gradient-to-r ${getSportColor(pick.sport)} p-6 text-white relative`}>
+                <div className="p-6 text-white relative" style={{ backgroundColor: getSportColor(pick.sport) }}>
                   <button
                     onClick={() => setShowModal(false)}
                     className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
@@ -150,7 +155,7 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
                     <span className="text-2xl">{getSportEmoji(pick.sport)}</span>
                     <span className="text-sm font-medium opacity-90">{pick.sport}</span>
                     {pick.isLive && (
-                      <span className="ml-2 px-2 py-0.5 bg-red-500 rounded text-xs font-bold animate-pulse">LIVE</span>
+                      <span className="ml-2 px-2 py-0.5 bg-[#FF3B30] rounded text-xs font-bold animate-pulse">LIVE</span>
                     )}
                   </div>
                   
@@ -162,49 +167,49 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
                 <div className="p-6 space-y-6">
                   {/* Key Stats */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-emerald-50 rounded-2xl p-3 text-center">
-                      <div className="text-2xl font-bold text-emerald-600">+{pick.edgePercent.toFixed(1)}%</div>
-                      <div className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-wider">Edge</div>
+                    <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: '#F0FFF4' }}>
+                      <div className="text-2xl font-bold" style={{ color: '#34C759' }}>+{pick.edgePercent.toFixed(1)}%</div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#34C759', opacity: 0.7 }}>Edge</div>
                     </div>
-                    <div className="bg-purple-50 rounded-2xl p-3 text-center">
-                      <div className="text-2xl font-bold text-[#895af6]">{pick.odds.toFixed(2)}</div>
-                      <div className="text-[10px] font-bold text-[#895af6]/70 uppercase tracking-wider">Cuota</div>
+                    <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: '#EEEEFF' }}>
+                      <div className="text-2xl font-bold text-[#5E5CE6]">{pick.odds.toFixed(2)}</div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#5E5CE6]/70">Cuota</div>
                     </div>
-                    <div className="bg-amber-50 rounded-2xl p-3 text-center">
-                      <div className="text-2xl font-bold text-amber-600">{pick.confidence}/10</div>
-                      <div className="text-[10px] font-bold text-amber-600/70 uppercase tracking-wider">Confianza</div>
+                    <div className="rounded-2xl p-3 text-center" style={{ backgroundColor: '#FFF8F0' }}>
+                      <div className="text-2xl font-bold text-[#FF9500]">{pick.confidence}/10</div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-[#FF9500]/70">Confianza</div>
                     </div>
                   </div>
 
                   {/* Bet Details */}
-                  <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                  <div className="bg-[#F5F5F7] rounded-2xl p-4 space-y-3">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-500">Mercado</span>
-                      <span className="font-bold text-slate-900">{pick.bestMarket}</span>
+                      <span className="text-sm text-[#6E6E73]">Mercado</span>
+                      <span className="font-bold text-[#1D1D1F]">{pick.bestMarket}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-500">Selección</span>
-                      <span className="font-bold text-[#895af6]">{pick.selection}</span>
+                      <span className="text-sm text-[#6E6E73]">Selección</span>
+                      <span className="font-bold text-[#5E5CE6]">{pick.selection}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-500">Bookmaker</span>
-                      <span className="font-bold text-slate-900">{pick.bookmaker}</span>
+                      <span className="text-sm text-[#6E6E73]">Bookmaker</span>
+                      <span className="font-bold text-[#1D1D1F]">{pick.bookmaker}</span>
                     </div>
                   </div>
 
                   {/* Analysis */}
                   <div className="space-y-2">
-                    <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-[#895af6]" />
+                    <h3 className="text-sm font-bold text-[#1D1D1F] flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-[#5E5CE6]" />
                       Análisis Detallado
                     </h3>
-                    <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-4">
+                    <p className="text-sm text-[#6E6E73] leading-relaxed bg-[#F5F5F7] rounded-xl p-4">
                       {pick.analysisText}
                     </p>
                   </div>
 
                   {/* Timestamp */}
-                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="flex items-center gap-2 text-xs text-[#AEAEB2]">
                     <Clock className="w-3 h-3" />
                     <span>Creado: {new Date(pick.createdAt).toLocaleString('es-ES')}</span>
                   </div>

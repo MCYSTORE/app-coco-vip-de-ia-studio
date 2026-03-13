@@ -20,7 +20,6 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Load predictions from localStorage
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
@@ -32,10 +31,8 @@ export default function Profile() {
         const total = predictions.length;
         const settled = won + lost;
         
-        // Calculate stats
         const winRate = settled > 0 ? (won / settled) * 100 : 0;
         
-        // Calculate profit (simplified - assumes 1 unit stake per bet)
         const profit = predictions
           .filter(p => p.status === 'won')
           .reduce((acc, p) => acc + ((p.odds || 1.85) - 1), 0);
@@ -43,10 +40,8 @@ export default function Profile() {
         const losses = predictions.filter(p => p.status === 'lost').length;
         const netProfit = profit - losses;
         
-        // Calculate ROI
         const roi = settled > 0 ? (netProfit / settled) * 100 : 0;
         
-        // Average odds
         const avgOdds = total > 0 
           ? predictions.reduce((acc, p) => acc + (p.odds || 1.85), 0) / total 
           : 0;
@@ -91,28 +86,28 @@ export default function Profile() {
       {/* Profile Header */}
       <div className="flex flex-col items-center py-6">
         <div className="relative mb-4">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#895af6] to-[#7c4df2] p-1 shadow-lg shadow-[#895af6]/30">
+          <div className="w-24 h-24 rounded-full p-1 shadow-lg" style={{ border: '2px solid #5E5CE6' }}>
             <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
-              <UserIcon className="w-12 h-12 text-[#895af6]" />
+              <UserIcon className="w-12 h-12 text-[#5E5CE6]" />
             </div>
           </div>
           {/* VIP Badge */}
-          <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-amber-400 to-amber-500 rounded-full p-1.5 shadow-md">
+          <div className="absolute -bottom-1 -right-1 bg-[#FF9500] rounded-full p-1.5 shadow-md">
             <Crown className="w-4 h-4 text-white" />
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-slate-900">Usuario Coco</h2>
-        <p className="text-slate-500 text-sm">Modo Local</p>
-        <div className="mt-2 px-3 py-1 bg-gradient-to-r from-[#895af6] to-[#7c4df2] rounded-full">
-          <span className="text-white text-xs font-bold flex items-center gap-1">
+        <h2 className="text-2xl font-bold text-[#1D1D1F]">Usuario Coco</h2>
+        <p className="text-[#6E6E73] text-sm">Modo Local</p>
+        <div className="mt-2 px-3 py-1 rounded-full" style={{ border: '1px solid #5E5CE6' }}>
+          <span className="text-[#5E5CE6] text-xs font-bold flex items-center gap-1">
             <Star className="w-3 h-3" />
             Miembro VIP
           </span>
         </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="bg-gradient-to-br from-[#895af6] to-[#6d3df2] rounded-3xl p-6 text-white shadow-lg shadow-[#895af6]/30">
+      {/* Stats Overview - Black carbon background */}
+      <div className="rounded-3xl p-6 text-white shadow-lg" style={{ backgroundColor: '#1C1C1E' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold flex items-center gap-2">
             <BarChart3 className="w-5 h-5" />
@@ -149,22 +144,23 @@ export default function Profile() {
               initial={{ width: 0 }}
               animate={{ width: `${Math.min(stats.winRate, 100)}%` }}
               transition={{ duration: 1, ease: "easeOut" }}
-              className="h-full bg-emerald-400 rounded-full"
+              className="h-full rounded-full"
+              style={{ backgroundColor: '#34C759' }}
             ></motion.div>
           </div>
         </div>
 
         {/* Profit / ROI */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/10 rounded-xl p-3 text-center">
+          <div className="rounded-xl p-3 text-center" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
             <div className="text-xl font-bold flex items-center justify-center gap-1">
               <DollarSign className="w-4 h-4" />
               {stats.profit >= 0 ? '+' : ''}{stats.profit.toFixed(1)}
             </div>
             <div className="text-[10px] text-white/70 uppercase">Profit (unidades)</div>
           </div>
-          <div className="bg-white/10 rounded-xl p-3 text-center">
-            <div className={`text-xl font-bold ${stats.roi >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+          <div className="rounded-xl p-3 text-center" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+            <div className="text-xl font-bold" style={{ color: stats.roi >= 0 ? '#34C759' : '#FF3B30' }}>
               {stats.roi >= 0 ? '+' : ''}{stats.roi.toFixed(1)}%
             </div>
             <div className="text-[10px] text-white/70 uppercase">ROI</div>
@@ -174,57 +170,59 @@ export default function Profile() {
 
       {/* Additional Stats */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-          <div className="flex items-center gap-2 text-slate-400 mb-2">
+        <div className="bg-white rounded-2xl p-4 border border-[#E5E5EA]" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+          <div className="flex items-center gap-2 text-[#6E6E73] mb-2">
             <Target className="w-4 h-4" />
             <span className="text-xs font-medium">Cuota Promedio</span>
           </div>
-          <div className="text-2xl font-bold text-slate-900">{stats.avgOdds.toFixed(2)}</div>
+          <div className="text-2xl font-bold text-[#1D1D1F]">{stats.avgOdds.toFixed(2)}</div>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-          <div className="flex items-center gap-2 text-slate-400 mb-2">
+        <div className="bg-white rounded-2xl p-4 border border-[#E5E5EA]" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+          <div className="flex items-center gap-2 text-[#6E6E73] mb-2">
             <Flame className="w-4 h-4" />
             <span className="text-xs font-medium">Mejor Racha</span>
           </div>
-          <div className="text-2xl font-bold text-slate-900">{stats.bestStreak} seguidas</div>
+          <div className="text-2xl font-bold text-[#1D1D1F]">{stats.bestStreak} seguidas</div>
         </div>
       </div>
 
       {/* Settings Menu */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 space-y-2">
-        <div className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-              <Mail className="w-5 h-5 text-blue-500" />
+      <div className="bg-white rounded-3xl p-4 border border-[#E5E5EA]" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between p-3 hover:bg-[#F5F5F7] rounded-2xl transition-colors cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#EEEEFF] flex items-center justify-center">
+                <Mail className="w-5 h-5 text-[#5E5CE6]" />
+              </div>
+              <div>
+                <span className="font-medium text-[#1D1D1F] block">Notificaciones</span>
+                <span className="text-xs text-[#AEAEB2]">Alertas de picks y resultados</span>
+              </div>
             </div>
-            <div>
-              <span className="font-medium text-slate-700 block">Notificaciones</span>
-              <span className="text-xs text-slate-400">Alertas de picks y resultados</span>
-            </div>
-          </div>
-          <div className="w-12 h-7 bg-emerald-500 rounded-full relative cursor-pointer">
-            <div className="absolute right-1 top-1 w-5 h-5 bg-white rounded-full shadow-sm transition-all"></div>
-          </div>
-        </div>
-        <div className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-[#895af6]" />
-            </div>
-            <div>
-              <span className="font-medium text-slate-700 block">Privacidad</span>
-              <span className="text-xs text-slate-400">Configurar datos</span>
+            <div className="w-12 h-7 rounded-full relative cursor-pointer" style={{ backgroundColor: '#34C759' }}>
+              <div className="absolute right-1 top-1 w-5 h-5 bg-white rounded-full shadow-sm transition-all"></div>
             </div>
           </div>
-        </div>
-        <div className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-              <Settings className="w-5 h-5 text-slate-500" />
+          <div className="flex items-center justify-between p-3 hover:bg-[#F5F5F7] rounded-2xl transition-colors cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#EEEEFF] flex items-center justify-center">
+                <Shield className="w-5 h-5 text-[#5E5CE6]" />
+              </div>
+              <div>
+                <span className="font-medium text-[#1D1D1F] block">Privacidad</span>
+                <span className="text-xs text-[#AEAEB2]">Configurar datos</span>
+              </div>
             </div>
-            <div>
-              <span className="font-medium text-slate-700 block">Preferencias</span>
-              <span className="text-xs text-slate-400">Deportes y mercados favoritos</span>
+          </div>
+          <div className="flex items-center justify-between p-3 hover:bg-[#F5F5F7] rounded-2xl transition-colors cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#F5F5F7] flex items-center justify-center">
+                <Settings className="w-5 h-5 text-[#6E6E73]" />
+              </div>
+              <div>
+                <span className="font-medium text-[#1D1D1F] block">Preferencias</span>
+                <span className="text-xs text-[#AEAEB2]">Deportes y mercados favoritos</span>
+              </div>
             </div>
           </div>
         </div>
@@ -233,14 +231,14 @@ export default function Profile() {
       {/* Clear Data Button */}
       <button
         onClick={clearAllData}
-        className="w-full py-4 bg-red-50 text-red-500 font-bold rounded-2xl flex items-center justify-center gap-3 hover:bg-red-100 transition-colors border border-red-100"
+        className="w-full py-4 bg-[#FFF1F0] text-[#FF3B30] font-bold rounded-2xl flex items-center justify-center gap-3 hover:bg-[#FFE5E3] transition-colors border border-[#FF3B30]/20"
       >
         <Trash2 className="w-5 h-5" />
         Borrar Todos los Datos
       </button>
 
       {/* Version */}
-      <div className="text-center text-xs text-slate-300 pb-4">
+      <div className="text-center text-xs text-[#AEAEB2] pb-4">
         Coco VIP v2.0 • Powered by API-Sports • Local Storage Mode
       </div>
     </div>
@@ -251,7 +249,6 @@ export default function Profile() {
 function calculateBestStreak(predictions: Prediction[]): number {
   if (!predictions.length) return 0;
   
-  // Sort by date
   const sorted = [...predictions].sort((a, b) => 
     new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
   );
