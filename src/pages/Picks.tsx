@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import PickCard from '../components/PickCard';
 import { Prediction } from '../types';
 import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp } from 'lucide-react';
@@ -6,9 +6,10 @@ import { motion, AnimatePresence } from 'motion/react';
 
 export default function Picks() {
   const [picks, setPicks] = useState<Prediction[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'live' | 'upcoming'>('all');
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const fetchPicks = async () => {
     setLoading(true);
@@ -17,6 +18,7 @@ export default function Picks() {
       const data = await response.json();
       setPicks(data);
       setLastUpdate(new Date());
+      setHasLoaded(true);
     } catch (error) {
       console.error("Error fetching picks:", error);
     } finally {
@@ -24,11 +26,7 @@ export default function Picks() {
     }
   };
 
-  useEffect(() => {
-    fetchPicks();
-    const interval = setInterval(fetchPicks, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // No auto-fetch - user must click button to load picks
 
   const filteredPicks = picks.filter(pick => {
     if (activeFilter === 'live') return pick.isLive;
@@ -49,6 +47,38 @@ export default function Picks() {
         </motion.div>
         <p className="text-[#6E6E73] font-medium mt-4">Analizando mercados en tiempo real...</p>
         <p className="text-[#AEAEB2] text-sm mt-1">Conectando con API-Sports</p>
+      </div>
+    );
+  }
+
+  // Show initial state with button to load picks
+  if (!hasLoaded && !loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-[#1D1D1F]">Top Picks</h2>
+            <p className="text-sm text-[#6E6E73] flex items-center gap-1">
+              <TrendingUp className="w-3 h-3" />
+              Mejores oportunidades detectadas
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="bg-[#F5F5F7] w-20 h-20 rounded-full flex items-center justify-center mb-4">
+            <TrendingUp className="w-10 h-10 text-[#5E5CE6]" />
+          </div>
+          <p className="text-[#1D1D1F] font-semibold text-lg">Obtener Top Picks</p>
+          <p className="text-[#6E6E73] text-sm mt-1 mb-6">Pulsa el botón para analizar los mercados</p>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={fetchPicks}
+            className="bg-[#5E5CE6] text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 shadow-lg shadow-[#5E5CE6]/25"
+          >
+            <Zap className="w-5 h-5" />
+            Analizar Mercados
+          </motion.button>
+        </div>
       </div>
     );
   }
@@ -113,10 +143,12 @@ export default function Picks() {
       </div>
 
       {/* Last Update */}
-      <div className="text-xs text-[#AEAEB2] flex items-center gap-1">
-        <Clock className="w-3 h-3" />
-        Última actualización: {lastUpdate.toLocaleTimeString('es-ES')}
-      </div>
+      {lastUpdate && (
+        <div className="text-xs text-[#AEAEB2] flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          Última actualización: {lastUpdate.toLocaleTimeString('es-ES')}
+        </div>
+      )}
 
       {/* Picks List */}
       <AnimatePresence mode="wait">
