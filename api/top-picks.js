@@ -171,7 +171,7 @@ export default async function handler(req, res) {
       return res.status(200).json(getFallbackPicks());
     }
 
-    return res.status(200).json(picks.slice(0, 10));
+    return res.status(200).json(picks.slice(0, 3));
   } catch (error) {
     console.error("Top picks error:", error);
     return res.status(200).json(getFallbackPicks());

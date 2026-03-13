@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Calendar, Target, Sparkles, Loader2, TrendingUp, Verified, Info, Trophy } from 'lucide-react';
+import { Search, Calendar, Sparkles, Loader2, TrendingUp, Verified, Info } from 'lucide-react';
 import { Prediction } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -11,17 +11,10 @@ const SPORTS = [
   { id: 'baseball', name: 'Béisbol', emoji: '⚾' }
 ];
 
-const MARKETS: Record<string, string[]> = {
-  football: ['1X2 Full Time', 'Over/Under 2.5', 'Ambos Anotan', 'Handicap', 'Corner Total'],
-  basketball: ['Ganador', 'Over/Under Puntos', 'Handicap', 'Cuarto 1X2'],
-  baseball: ['Ganador', 'Run Line', 'Total Carreras', '1er Inning']
-};
-
 export default function Analysis() {
   const [formData, setFormData] = useState({
     match_name: '',
     date: '',
-    market_preference: '1X2 Full Time',
     sport: 'football',
     user_context: ''
   });
@@ -43,12 +36,11 @@ export default function Analysis() {
       });
       const data = await response.json();
       
-      // Normalize the response to use camelCase
       const normalizedResult: Prediction = {
         id: Date.now().toString(),
         matchName: data.matchName || data.match_name || formData.match_name,
         sport: data.sport || formData.sport,
-        bestMarket: data.bestMarket || data.best_market || formData.market_preference,
+        bestMarket: data.bestMarket || data.best_market || 'Análisis completo',
         selection: data.selection || '',
         bookmaker: data.bookmaker || 'General',
         odds: data.odds || 1.85,
@@ -71,18 +63,15 @@ export default function Analysis() {
     if (!result) return;
     
     try {
-      // Load existing predictions
       const stored = localStorage.getItem(STORAGE_KEY);
       const existing: Prediction[] = stored ? JSON.parse(stored) : [];
       
-      // Add new prediction
       const newPrediction: Prediction = {
         ...result,
         userContext: formData.user_context,
         createdAt: new Date().toISOString()
       };
       
-      // Save to localStorage
       localStorage.setItem(STORAGE_KEY, JSON.stringify([newPrediction, ...existing]));
       setSaved(true);
     } catch (error) {
@@ -90,13 +79,11 @@ export default function Analysis() {
     }
   };
 
-  const currentMarkets = MARKETS[formData.sport] || MARKETS.football;
-
   return (
     <div className="space-y-6">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-900">Análisis Manual</h2>
-        <p className="text-sm text-slate-500 mt-1">Analiza cualquier partido para encontrar valor oculto</p>
+        <p className="text-sm text-slate-500 mt-1">La IA analizará todos los mercados y te dará las mejores opciones</p>
       </div>
 
       <div className="space-y-5">
@@ -107,11 +94,7 @@ export default function Analysis() {
             {SPORTS.map((sport) => (
               <button
                 key={sport.id}
-                onClick={() => setFormData({ 
-                  ...formData, 
-                  sport: sport.id,
-                  market_preference: MARKETS[sport.id][0]
-                })}
+                onClick={() => setFormData({ ...formData, sport: sport.id })}
                 className={`py-3 rounded-xl font-medium text-sm transition-all flex flex-col items-center gap-1 ${
                   formData.sport === sport.id 
                     ? 'bg-[#895af6] text-white shadow-lg shadow-[#895af6]/20' 
@@ -140,31 +123,17 @@ export default function Analysis() {
           </div>
         </div>
 
-        {/* Date and Market */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700 ml-1">Fecha (Opcional)</label>
-            <div className="relative flex items-center">
-              <Calendar className="absolute left-3.5 text-slate-400 w-5 h-5" />
-              <input
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full pl-11 pr-3 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#895af6] focus:border-transparent outline-none text-slate-900 text-sm"
-                type="date"
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700 ml-1">Mercado</label>
-            <select
-              value={formData.market_preference}
-              onChange={(e) => setFormData({ ...formData, market_preference: e.target.value })}
-              className="w-full px-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#895af6] focus:border-transparent outline-none text-slate-900 text-sm appearance-none"
-            >
-              {currentMarkets.map(market => (
-                <option key={market} value={market}>{market}</option>
-              ))}
-            </select>
+        {/* Date */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-slate-700 ml-1">Fecha (Opcional)</label>
+          <div className="relative flex items-center">
+            <Calendar className="absolute left-4 text-slate-400 w-5 h-5" />
+            <input
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+              className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#895af6] focus:border-transparent outline-none text-slate-900 text-sm"
+              type="date"
+            />
           </div>
         </div>
 

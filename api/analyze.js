@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { match_name, date, user_context, market_preference, sport = 'football' } = req.body;
+  const { match_name, date, user_context, sport = 'football' } = req.body;
 
   if (!match_name) {
     return res.status(400).json({ error: 'match_name is required' });
@@ -53,19 +53,31 @@ export default async function handler(req, res) {
     return res.status(200).json(generateMockAnalysis(match_name, sport));
   }
 
-  const SYSTEM_PROMPT = `Eres un experto analista de apuestas deportivas profesional.
-Tu objetivo es identificar "Value Bets" (apuestas con valor) comparando probabilidades reales con las cuotas del mercado.
-Devuelve SIEMPRE un objeto JSON con la siguiente estructura:
+  const SYSTEM_PROMPT = `Eres un experto analista de apuestas deportivas profesional con años de experiencia identificando Value Bets.
+
+Tu tarea es analizar TODOS los mercados disponibles para un partido y encontrar la MEJOR oportunidad de valor.
+
+Debes analizar exhaustivamente:
+- Para FÚTBOL: 1X2, Over/Under goles (0.5, 1.5, 2.5, 3.5), Ambos Anotan, Handicaps, Córners, Tarjetas
+- Para BASKETBALL: Ganador, Over/Under puntos, Handicaps, Cuartos, Mitades
+- Para BÉISBOL: Ganador, Run Line, Total Carreras, 1er Inning, Hits
+
+Para cada mercado, evalúa:
+1. Probabilidad real basada en estadísticas
+2. Cuota ofrecida por el mercado
+3. Edge potencial (diferencia entre probabilidad real y cuota implícita)
+
+Devuelve SOLO la mejor Value Bet encontrada en formato JSON:
 {
-  "matchName": "string",
-  "sport": "string",
-  "bestMarket": "string",
-  "selection": "string",
-  "bookmaker": "string",
-  "odds": number,
-  "edgePercent": number,
-  "confidence": number (1-10),
-  "analysisText": "string",
+  "matchName": "nombre del partido",
+  "sport": "deporte",
+  "bestMarket": "mercado con mayor valor",
+  "selection": "selección específica recomendada",
+  "bookmaker": "casa de apuestas sugerida",
+  "odds": número (cuota decimal),
+  "edgePercent": número (porcentaje de ventaja),
+  "confidence": número del 1 al 10,
+  "analysisText": "explicación detallada de por qué es value bet, mencionando estadísticas clave, contexto del partido, y análisis de TODOS los mercados evaluados",
   "status": "pending"
 }`;
 
@@ -82,9 +94,14 @@ Devuelve SIEMPRE un objeto JSON con la siguiente estructura:
         model: "deepseek/deepseek-v3",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Analiza: ${match_name}. Fecha: ${date || 'próximamente'}. Contexto: ${user_context || 'Ninguno'}. Mercado: ${market_preference || 'Cualquiera'}.` }
+          { role: "user", content: `Analiza COMPLETAMENTE este partido: ${match_name}.
+Deporte: ${sport}
+Fecha: ${date || 'próximamente'}
+Contexto adicional: ${user_context || 'Ninguno'}
+
+Analiza TODOS los mercados disponibles y dame la MEJOR Value Bet encontrada con su justificación completa.` }
         ],
-        temperature: 0.1,
+        temperature: 0.3,
         response_format: { type: "json_object" }
       })
     });
