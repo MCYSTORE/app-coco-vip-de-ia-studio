@@ -1,8 +1,6 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
 
-async function fetchFromAPI(endpoint: string, sport: 'football' | 'basketball' | 'baseball'): Promise<any> {
+async function fetchFromAPI(endpoint, sport) {
   const baseUrl = `https://v3.${sport === 'football' ? 'football' : sport === 'basketball' ? 'basketball' : 'baseball'}.api-sports.io`;
 
   const response = await fetch(`${baseUrl}/${endpoint}`, {
@@ -71,8 +69,7 @@ function getFallbackPicks() {
   ];
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
@@ -83,7 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const picks = [];
 
-    // Fetch football matches
     try {
       const footballData = await fetchFromAPI('fixtures?live=all', 'football');
       const liveFootball = (footballData.response || []).slice(0, 5);
@@ -110,7 +106,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log("Football fetch skipped");
     }
 
-    // Fetch basketball games
     try {
       const basketballData = await fetchFromAPI('games?live=all', 'basketball');
       const liveBasketball = (basketballData.response || []).slice(0, 5);
@@ -137,7 +132,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log("Basketball fetch skipped");
     }
 
-    // Add upcoming picks
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
 
@@ -145,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const upcomingData = await fetchFromAPI(`fixtures?date=${dateStr}`, 'football');
       const majorLeagues = [39, 140, 135, 78, 61];
       const upcoming = (upcomingData.response || [])
-        .filter((f: any) => majorLeagues.includes(f.league.id))
+        .filter(f => majorLeagues.includes(f.league.id))
         .slice(0, 5);
 
       for (const match of upcoming) {
@@ -171,7 +165,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log("Upcoming football fetch skipped");
     }
 
-    // Sort by confidence and edge
     picks.sort((a, b) => (b.confidence + b.edgePercent / 10) - (a.confidence + a.edgePercent / 10));
 
     if (picks.length === 0) {

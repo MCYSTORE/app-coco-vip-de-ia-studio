@@ -1,16 +1,14 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-function generateMockAnalysis(matchName: string, sport: string) {
-  const markets: Record<string, string[]> = {
+function generateMockAnalysis(matchName, sport) {
+  const markets = {
     football: ['Over 2.5 Goles', 'Ambos Equipos Anotan', '1X2', 'Handicap -0.5', 'Corner +9.5'],
-    basketball: ['Over/Under 220.5', 'Handicap -5.5', 'Ganador 1X2', 'Cuarto 1 - Ganador'],
-    baseball: ['Run Line -1.5', 'Total Runs Over 7.5', 'Ganador', '1er Inning - Carreras']
+    basketball: ['Over/Under 220.5', 'Handicap -5.5', 'Ganador', 'Cuarto 1 - Ganador'],
+    baseball: ['Run Line -1.5', 'Total Runs Over 7.5', 'Ganador', '1er Inning']
   };
 
   const bookmakers = ['Bet365', 'Pinnacle', 'Bwin', '1xBet', 'William Hill'];
-  const sportMarkets = markets[sport as keyof typeof markets] || markets.football;
+  const sportMarkets = markets[sport] || markets.football;
 
   const randomMarket = sportMarkets[Math.floor(Math.random() * sportMarkets.length)];
   const randomBookmaker = bookmakers[Math.floor(Math.random() * bookmakers.length)];
@@ -32,8 +30,7 @@ function generateMockAnalysis(matchName: string, sport: string) {
   };
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -56,20 +53,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(generateMockAnalysis(match_name, sport));
   }
 
-  const SYSTEM_PROMPT_VALUE_BET = `Eres un experto analista de apuestas deportivas profesional.
+  const SYSTEM_PROMPT = `Eres un experto analista de apuestas deportivas profesional.
 Tu objetivo es identificar "Value Bets" (apuestas con valor) comparando probabilidades reales con las cuotas del mercado.
-Debes ser extremadamente analítico, evitar alucinaciones y basarte en datos.
-Devuelve SIEMPRE un objeto JSON con la siguiente estructura exacta:
+Devuelve SIEMPRE un objeto JSON con la siguiente estructura:
 {
-  "matchName": "string (nombre del partido)",
-  "sport": "string (deporte)",
-  "bestMarket": "string (mejor mercado)",
-  "selection": "string (selección recomendada)",
-  "bookmaker": "string (casa de apuestas recomendada)",
-  "odds": number (cuota decimal),
-  "edgePercent": number (porcentaje de ventaja sobre el mercado),
+  "matchName": "string",
+  "sport": "string",
+  "bestMarket": "string",
+  "selection": "string",
+  "bookmaker": "string",
+  "odds": number,
+  "edgePercent": number,
   "confidence": number (1-10),
-  "analysisText": "string (explicación técnica detallada)",
+  "analysisText": "string",
   "status": "pending"
 }`;
 
@@ -85,8 +81,8 @@ Devuelve SIEMPRE un objeto JSON con la siguiente estructura exacta:
       body: JSON.stringify({
         model: "deepseek/deepseek-v3",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT_VALUE_BET },
-          { role: "user", content: `Analiza este partido: ${match_name}. Fecha: ${date || 'próximamente'}. Contexto adicional: ${user_context || 'Ninguno'}. Preferencia de mercado: ${market_preference || 'Cualquiera'}.` }
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Analiza: ${match_name}. Fecha: ${date || 'próximamente'}. Contexto: ${user_context || 'Ninguno'}. Mercado: ${market_preference || 'Cualquiera'}.` }
         ],
         temperature: 0.1,
         response_format: { type: "json_object" }
