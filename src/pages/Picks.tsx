@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import PickCard from '../components/PickCard';
 import { Prediction } from '../types';
-import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp } from 'lucide-react';
+import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp, Radar, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function Picks() {
+interface PicksProps {
+  onOpenScanner?: () => void;
+}
+
+export default function Picks({ onOpenScanner }: PicksProps) {
   const [picks, setPicks] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'live' | 'upcoming'>('all');
@@ -148,6 +152,26 @@ export default function Picks() {
           <Clock className="w-3 h-3" />
           Última actualización: {lastUpdate.toLocaleTimeString('es-ES')}
         </div>
+      )}
+
+      {/* Open Scanner Button */}
+      {onOpenScanner && (
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onOpenScanner}
+          className="w-full bg-gradient-to-r from-[#1C1C1E] to-[#3A3A3C] text-white p-4 rounded-2xl flex items-center justify-between shadow-lg"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#5E5CE6] rounded-xl flex items-center justify-center">
+              <Radar className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <p className="font-bold">Escáner de Value Bets</p>
+              <p className="text-xs text-white/60">Radar de oportunidades en tiempo real</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-white/60" />
+        </motion.button>
       )}
 
       {/* Picks List */}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Calendar, Sparkles, Loader2, TrendingUp, Verified, Info, Database } from 'lucide-react';
 import { Prediction } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -11,9 +11,13 @@ const SPORTS = [
   { id: 'baseball', name: 'Béisbol', emoji: '⚾' }
 ];
 
-export default function Analysis() {
+interface AnalysisProps {
+  initialMatchName?: string | null;
+}
+
+export default function Analysis({ initialMatchName }: AnalysisProps) {
   const [formData, setFormData] = useState({
-    match_name: '',
+    match_name: initialMatchName || '',
     date: '',
     sport: 'football',
     user_context: ''
@@ -21,6 +25,13 @@ export default function Analysis() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Prediction | null>(null);
   const [saved, setSaved] = useState(false);
+
+  // Update form when initialMatchName changes
+  useEffect(() => {
+    if (initialMatchName) {
+      setFormData(prev => ({ ...prev, match_name: initialMatchName }));
+    }
+  }, [initialMatchName]);
 
   const handleAnalyze = async () => {
     if (!formData.match_name) return;

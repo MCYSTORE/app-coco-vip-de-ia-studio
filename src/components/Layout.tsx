@@ -83,6 +83,50 @@ const ProfileIcon = ({ active }: { active?: boolean }) => (
   </svg>
 );
 
+const ScannerIcon = ({ active }: { active?: boolean }) => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="transition-all">
+    <circle 
+      cx="12" cy="12" r="10" 
+      stroke={active ? "#5E5CE6" : "#AEAEB2"}
+      strokeWidth="2"
+    />
+    <circle 
+      cx="12" cy="12" r="6" 
+      stroke={active ? "#5E5CE6" : "#AEAEB2"}
+      strokeWidth="2"
+      strokeDasharray="4 2"
+    />
+    <circle 
+      cx="12" cy="12" r="2" 
+      fill={active ? "#5E5CE6" : "#AEAEB2"}
+    />
+    <path 
+      d="M12 2V6" 
+      stroke={active ? "#5E5CE6" : "#AEAEB2"}
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path 
+      d="M12 18V22" 
+      stroke={active ? "#5E5CE6" : "#AEAEB2"}
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path 
+      d="M2 12H6" 
+      stroke={active ? "#5E5CE6" : "#AEAEB2"}
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path 
+      d="M18 12H22" 
+      stroke={active ? "#5E5CE6" : "#AEAEB2"}
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 export default function Layout({ children, activeTab, setActiveTab }: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -109,7 +153,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
             <Sparkles className="text-white w-5 h-5" />
           </div>
           <h1 className="text-lg font-bold tracking-tight text-[#1D1D1F]">
-            {tabs.find(t => t.id === activeTab)?.label || 'Coco VIP'}
+            {activeTab === 'scanner' ? 'Scanner' : tabs.find(t => t.id === activeTab)?.label || 'Coco VIP'}
           </h1>
         </div>
         
@@ -250,6 +294,25 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                       </button>
                     );
                   })}
+                  
+                  {/* Scanner - Special Menu Item */}
+                  <div className="pt-2 border-t border-[#E5E5EA] mt-2">
+                    <button
+                      onClick={() => { setActiveTab('scanner'); setIsMenuOpen(false); }}
+                      className={cn(
+                        "w-full flex items-center gap-3 p-3.5 rounded-xl font-medium transition-all duration-200",
+                        activeTab === 'scanner' 
+                          ? "bg-[#EEEEFF] text-[#5E5CE6]" 
+                          : "text-[#6E6E73] hover:bg-[#F5F5F7]"
+                      )}
+                    >
+                      <ScannerIcon active={activeTab === 'scanner'} />
+                      Scanner
+                      {activeTab === 'scanner' && (
+                        <div className="ml-auto w-2 h-2 rounded-full bg-[#5E5CE6]" />
+                      )}
+                    </button>
+                  </div>
                 </nav>
 
                 {/* Bottom Info */}
