@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Prediction } from '../types';
-import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check } from 'lucide-react';
+import { Prediction, calculateExtraEdge } from '../types';
+import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check, ShoppingBag, ArrowUpRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const STORAGE_KEY = 'coco_vip_predictions';
@@ -14,6 +14,11 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
   const [showModal, setShowModal] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [saved, setSaved] = useState(false);
+  
+  // Calculate odds shopping data
+  const hasBestOdd = pick.bestOdd && pick.bestOdd > pick.odds;
+  const extraEdgePercent = hasBestOdd ? calculateExtraEdge(pick.bestOdd!, pick.odds) : 0;
+  const numAlternativeBookmakers = pick.allOdds?.length ? pick.allOdds.length - 1 : 0;
 
   const saveToHistory = () => {
     try {
@@ -132,12 +137,40 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
           <div className="mb-4 space-y-2">
             <div className="flex items-center gap-2 text-[#6E6E73] text-sm">
               <Target className="w-4 h-4 text-[#5E5CE6]" />
-              <span><strong className="text-[#1D1D1F]">{pick.selection}</strong> @ {pick.bookmaker}</span>
+              <span><strong className="text-[#1D1D1F]">{pick.selection}</strong></span>
             </div>
-            <div className="flex items-center gap-2 text-[#6E6E73] text-sm">
-              <Building2 className="w-4 h-4 text-[#5E5CE6]" />
-              <span>Cuota: <strong className="text-[#1D1D1F]">{pick.odds.toFixed(2)}</strong></span>
-            </div>
+            
+            {/* Odds Shopping Display */}
+            {hasBestOdd ? (
+              <div className="bg-[#F0FFF4] rounded-xl p-3 border border-[#34C759]/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <ShoppingBag className="w-4 h-4 text-[#34C759]" />
+                  <span className="text-xs font-bold text-[#34C759] uppercase">Mejor cuota disponible</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-bold text-[#1D1D1F]">{pick.bestOdd?.toFixed(2)}</span>
+                  <span className="text-sm text-[#6E6E73]">en {pick.bestBookmaker}</span>
+                </div>
+                {extraEdgePercent > 0 && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <ArrowUpRight className="w-3 h-3 text-[#16A34A]" />
+                    <span className="text-xs font-medium text-[#16A34A]">
+                      +{extraEdgePercent.toFixed(1)}% edge extra vs cuota base
+                    </span>
+                  </div>
+                )}
+                {numAlternativeBookmakers > 0 && (
+                  <p className="text-[10px] text-[#6E6E73] mt-1">
+                    {numAlternativeBookmakers} otra{numAlternativeBookmakers > 1 ? 's' : ''} casa{numAlternativeBookmakers > 1 ? 's' : ''} disponible{numAlternativeBookmakers > 1 ? 's' : ''}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-[#6E6E73] text-sm">
+                <Building2 className="w-4 h-4 text-[#5E5CE6]" />
+                <span>Cuota: <strong className="text-[#1D1D1F]">{pick.odds.toFixed(2)}</strong> @ {pick.bookmaker}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">

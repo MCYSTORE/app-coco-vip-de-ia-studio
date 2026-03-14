@@ -1,3 +1,8 @@
+export interface OddOption {
+  bookmaker: string;
+  odds: number;
+}
+
 export interface Prediction {
   id: string;
   userId?: string;
@@ -17,6 +22,24 @@ export interface Prediction {
   league?: string;
   isLive?: boolean;
   hasRealStats?: boolean;
+  // Odds Shopping
+  allOdds?: OddOption[];
+  bestBookmaker?: string;
+  bestOdd?: number;
+}
+
+// Helper function to find best odd from array
+export function getBestOdd(oddsArray: OddOption[]): { bookmaker: string; odds: number } | null {
+  if (!oddsArray || oddsArray.length === 0) return null;
+  return oddsArray.reduce((best, current) => 
+    current.odds > best.odds ? current : best
+  , oddsArray[0]);
+}
+
+// Calculate extra edge percentage
+export function calculateExtraEdge(bestOdd: number, baseOdd: number): number {
+  if (!bestOdd || !baseOdd || bestOdd <= baseOdd) return 0;
+  return ((bestOdd - baseOdd) / baseOdd) * 100;
 }
 
 export interface UserProfile {

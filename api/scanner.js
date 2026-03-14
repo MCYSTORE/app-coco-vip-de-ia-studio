@@ -2,6 +2,32 @@ const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
 const GOOGLE_SHEETS_URL = process.env.GOOGLE_SHEETS_URL;
 
+// Bookmakers for odds shopping
+const BOOKMAKERS = [
+  'Bet365', 'Pinnacle', 'Bwin', '1xBet', 'William Hill',
+  'Betfair', 'DraftKings', 'FanDuel', 'BetMGM', 'Caesars'
+];
+
+// Generate all odds from different bookmakers
+function generateAllOdds(baseOdds, numBookmakers = 5) {
+  const allOdds = [];
+  const selectedBookmakers = BOOKMAKERS.sort(() => 0.5 - Math.random()).slice(0, numBookmakers);
+  
+  for (const bookmaker of selectedBookmakers) {
+    const variation = -0.03 + Math.random() * 0.08;
+    const odds = +(baseOdds * (1 + variation)).toFixed(2);
+    allOdds.push({ bookmaker, odds });
+  }
+  
+  return allOdds.sort((a, b) => b.odds - a.odds);
+}
+
+// Get best odd from array
+function getBestOdd(allOdds) {
+  if (!allOdds || allOdds.length === 0) return null;
+  return allOdds[0];
+}
+
 const SYSTEM_PROMPT = `Eres un escáner profesional de value bets.
 Recibes un array de partidos del día con sus cuotas y estadísticas disponibles.
 Tu tarea es evaluar TODOS los mercados de TODOS los partidos
@@ -358,7 +384,6 @@ export default async function handler(req, res) {
 // Generate mock results for fallback
 function generateMockResults(matches, scanDate) {
   const results = [];
-  const bookmakers = ['Bet365', 'Pinnacle', 'Bwin', '1xBet', 'William Hill'];
   
   const markets = {
     Football: [
@@ -379,6 +404,9 @@ function generateMockResults(matches, scanDate) {
   matches.slice(0, 5).forEach((match, i) => {
     const sportMarkets = markets[match.sport] || markets.Football;
     const randomMarket = sportMarkets[Math.floor(Math.random() * sportMarkets.length)];
+    const baseOdds = +(1.7 + Math.random() * 1.2).toFixed(2);
+    const allOdds = generateAllOdds(baseOdds);
+    const best = getBestOdd(allOdds);
     
     results.push({
       id: `scan-${Date.now()}-${i}`,
@@ -388,12 +416,15 @@ function generateMockResults(matches, scanDate) {
       league: match.league || 'Liga Principal',
       market: randomMarket.market,
       selection: randomMarket.selection,
-      bookmaker: bookmakers[Math.floor(Math.random() * bookmakers.length)],
-      odds: +(1.7 + Math.random() * 1.2).toFixed(2),
+      bookmaker: best?.bookmaker || 'Bet365',
+      odds: baseOdds,
       implied_prob: +(0.35 + Math.random() * 0.35).toFixed(4),
       estimated_edge: +(4 + Math.random() * 12).toFixed(1),
       confidence: Math.floor(5 + Math.random() * 5),
-      analysis_short: `Análisis automatizado detecta valor en este mercado basado en cuotas ofrecidas y estadísticas históricas.`
+      analysis_short: `Análisis automatizado detecta valor en este mercado basado en cuotas ofrecidas y estadísticas históricas.`,
+      all_odds: allOdds,
+      best_bookmaker: best?.bookmaker,
+      best_odd: best?.odds
     });
   });
 
