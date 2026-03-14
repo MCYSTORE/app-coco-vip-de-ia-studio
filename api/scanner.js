@@ -1,5 +1,6 @@
 const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
+const GOOGLE_SHEETS_URL = process.env.GOOGLE_SHEETS_URL;
 
 const SYSTEM_PROMPT = `Eres un escáner profesional de value bets.
 Recibes un array de partidos del día con sus cuotas y estadísticas disponibles.
@@ -208,6 +209,43 @@ function prepareDataForLLM(matches) {
   });
 }
 
+// Save results to Google Sheets
+async function saveToGoogleSheets(results) {
+  if (!GOOGLE_SHEETS_URL || !results || results.length === 0) {
+    return { success: false, reason: 'No URL or no results' };
+  }
+
+  try {
+    const response = await fetch(GOOGLE_SHEETS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'saveResults',
+        results: results.map(r => ({
+          id: r.id,
+          match_name: r.match_name,
+          sport: r.sport,
+          league: r.league,
+          market: r.market,
+          selection: r.selection,
+          bookmaker: r.bookmaker,
+          odds: r.odds,
+          implied_prob: r.implied_prob,
+          estimated_edge: r.estimated_edge,
+          confidence: r.confidence,
+          analysis_short: r.analysis_short
+        }))
+      })
+    });
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error saving to Google Sheets:", error);
+    return { success: false, error: error.message };
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -283,12 +321,25 @@ export default async function handler(req, res) {
         ...r,
         id: `scan-${Date.now()}-${i}`
       }));
+      
+      // Save to Google Sheets in background (don't wait for response)
+      saveToGoogleSheets(scanResult.results).then(result => {
+        if (result.success) {
+          console.log(`Saved ${scanResult.results.length} results to Google Sheets`);
+        }
+      }).catch(err => console.error("Sheets save error:", err));
     }
 
     return res.status(200).json(scanResult);
   } catch (error) {
     console.error("Scanner LLM Error:", error);
     const mockResults = generateMockResults(matchesToAnalyze, scanDate);
+    
+    // Also save mock results to sheets for testing
+    if (mockResults.results && mockResults.results.length > 0) {
+      saveToGoogleSheets(mockResults.results).catch(err => console.error("Sheets save error:", err));
+    }
+    
     return res.status(200).json(mockResults);
   }
 }
