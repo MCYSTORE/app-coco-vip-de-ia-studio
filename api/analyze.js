@@ -91,7 +91,7 @@ Devuelve SOLO la mejor Value Bet encontrada en formato JSON:
         'X-Title': 'Coco VIP Assistant'
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-v3",
+        model: "openrouter/free",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: `Analiza COMPLETAMENTE este partido: ${match_name}.
@@ -99,15 +99,20 @@ Deporte: ${sport}
 Fecha: ${date || 'próximamente'}
 Contexto adicional: ${user_context || 'Ninguno'}
 
-Analiza TODOS los mercados disponibles y dame la MEJOR Value Bet encontrada con su justificación completa.` }
+Analiza TODOS los mercados disponibles y dame la MEJOR Value Bet encontrada con su justificación completa.
+
+IMPORTANTE: Responde SOLO con JSON válido, sin texto adicional.` }
         ],
-        temperature: 0.3,
-        response_format: { type: "json_object" }
+        temperature: 0.3
       })
     });
 
     const data = await response.json();
-    const analysis = JSON.parse(data.choices[0].message.content);
+    
+    // Parse the response - handle potential markdown code blocks
+    let content = data.choices[0].message.content;
+    content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const analysis = JSON.parse(content);
     return res.status(200).json(analysis);
   } catch (error) {
     console.error("OpenRouter Error:", error);
