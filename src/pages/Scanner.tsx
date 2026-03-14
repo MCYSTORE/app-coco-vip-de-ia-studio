@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Radar, Loader2, Filter, TrendingUp, Target, Clock, ChevronRight, RefreshCw, Search, AlertTriangle } from 'lucide-react';
+import { Radar, Loader2, Filter, TrendingUp, Target, Clock, ChevronRight, RefreshCw, Search, AlertTriangle, ShoppingBag, ArrowUpRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+// Helper function to calculate extra edge
+const calculateExtraEdge = (bestOdd: number, baseOdd: number): number => {
+  if (!bestOdd || !baseOdd || bestOdd <= baseOdd) return 0;
+  return ((bestOdd - baseOdd) / baseOdd) * 100;
+};
 
 interface ScanResult {
   id: string;
@@ -16,6 +22,10 @@ interface ScanResult {
   estimated_edge: number;
   confidence: number;
   analysis_short: string;
+  // Odds Shopping fields
+  all_odds?: Array<{ bookmaker: string; odds: number }>;
+  best_bookmaker?: string;
+  best_odd?: number;
 }
 
 interface ScanResponse {
@@ -277,20 +287,47 @@ export default function Scanner() {
                       <p className="text-[10px] text-[#AEAEB2] uppercase font-bold">Selección</p>
                       <p className="font-bold text-[#5E5CE6]">{result.selection}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-[#AEAEB2] uppercase font-bold">Cuota</p>
-                      <p className="font-bold text-[#1D1D1F]">{result.odds.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[#AEAEB2] uppercase font-bold">Casa</p>
-                      <p className="text-sm text-[#6E6E73]">{result.bookmaker}</p>
-                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-[#34C759]">+{result.estimated_edge.toFixed(1)}%</div>
                     <div className="text-[10px] text-[#34C759] uppercase font-bold">Edge</div>
                   </div>
                 </div>
+
+                {/* Odds Shopping Display */}
+                {result.best_odd && result.best_odd > result.odds ? (
+                  <div className="bg-[#F0FFF4] rounded-xl p-3 mb-3 border border-[#34C759]/20">
+                    <div className="flex items-center gap-2 mb-1">
+                      <ShoppingBag className="w-4 h-4 text-[#34C759]" />
+                      <span className="text-xs font-bold text-[#34C759] uppercase">Mejor cuota disponible</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xl font-bold text-[#1D1D1F]">{result.best_odd.toFixed(2)}</span>
+                      <span className="text-sm text-[#6E6E73]">en {result.best_bookmaker}</span>
+                    </div>
+                    {(() => {
+                      const extraEdge = calculateExtraEdge(result.best_odd!, result.odds);
+                      return extraEdge > 0 ? (
+                        <div className="flex items-center gap-1 mt-1">
+                          <ArrowUpRight className="w-3 h-3 text-[#16A34A]" />
+                          <span className="text-xs font-medium text-[#16A34A]">
+                            +{extraEdge.toFixed(1)}% edge extra vs cuota base
+                          </span>
+                        </div>
+                      ) : null;
+                    })()}
+                    {result.all_odds && result.all_odds.length > 1 && (
+                      <p className="text-[10px] text-[#6E6E73] mt-1">
+                        {result.all_odds.length - 1} otra{result.all_odds.length > 2 ? 's' : ''} casa{result.all_odds.length > 2 ? 's' : ''} disponible{result.all_odds.length > 2 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-sm text-[#6E6E73] mb-3">
+                    <span>Cuota: <strong className="text-[#1D1D1F]">{result.odds.toFixed(2)}</strong></span>
+                    <span>@ {result.bookmaker}</span>
+                  </div>
+                )}
 
                 {/* Confidence Bar */}
                 <div className="mb-3">
