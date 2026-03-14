@@ -1,4 +1,4 @@
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
 
 function generateMockAnalysis(matchName, sport) {
   const markets = {
@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'match_name is required' });
   }
 
-  if (!OPENROUTER_API_KEY) {
+  if (!OPENROUTERFREE_API_KEY) {
     return res.status(200).json(generateMockAnalysis(match_name, sport));
   }
 
@@ -85,7 +85,7 @@ Devuelve SOLO la mejor Value Bet encontrada en formato JSON:
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${OPENROUTERFREE_API_KEY}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': process.env.APP_URL || 'https://app-coco-vip-de-ia-studio.vercel.app',
         'X-Title': 'Coco VIP Assistant'
