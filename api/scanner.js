@@ -209,37 +209,48 @@ function prepareDataForLLM(matches) {
   });
 }
 
-// Save results to Google Sheets
+// Save results to Google Sheets (using GET due to Google redirects)
 async function saveToGoogleSheets(results) {
   if (!GOOGLE_SHEETS_URL || !results || results.length === 0) {
     return { success: false, reason: 'No URL or no results' };
   }
 
   try {
-    const response = await fetch(GOOGLE_SHEETS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'saveResults',
-        results: results.map(r => ({
-          id: r.id,
-          match_name: r.match_name,
-          sport: r.sport,
-          league: r.league,
-          market: r.market,
-          selection: r.selection,
-          bookmaker: r.bookmaker,
-          odds: r.odds,
-          implied_prob: r.implied_prob,
-          estimated_edge: r.estimated_edge,
-          confidence: r.confidence,
-          analysis_short: r.analysis_short
-        }))
-      })
+    // Encode data as URL parameter (Google Apps Script requires GET)
+    const encodedData = encodeURIComponent(JSON.stringify(results.map(r => ({
+      id: r.id,
+      match_name: r.match_name,
+      sport: r.sport,
+      league: r.league,
+      market: r.market,
+      selection: r.selection,
+      bookmaker: r.bookmaker,
+      odds: r.odds,
+      implied_prob: r.implied_prob,
+      estimated_edge: r.estimated_edge,
+      confidence: r.confidence,
+      analysis_short: r.analysis_short
+    }))));
+    
+    const url = `${GOOGLE_SHEETS_URL}?action=saveResults&data=${encodedData}`;
+    
+    // Use redirect: 'follow' to handle Google's redirects
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow'
     });
-
-    const data = await response.json();
-    return data;
+    
+    const text = await response.text();
+    
+    // Try to parse as JSON
+    try {
+      const data = JSON.parse(text);
+      console.log("Google Sheets response:", data);
+      return data;
+    } catch {
+      console.error("Google Sheets response not JSON:", text.substring(0, 200));
+      return { success: false, error: 'Invalid response', text: text.substring(0, 100) };
+    }
   } catch (error) {
     console.error("Error saving to Google Sheets:", error);
     return { success: false, error: error.message };
