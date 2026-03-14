@@ -1,4 +1,89 @@
 const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
+const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
+
+// Fetch team/match statistics from API-Sports
+async function fetchMatchStats(matchName, sport) {
+  if (!SPORTS_API_KEY) return null;
+  
+  try {
+    // Parse team names from match name (e.g., "Real Madrid vs Barcelona")
+    const teams = matchName.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
+    if (teams.length < 2) return null;
+    
+    const homeTeam = teams[0].trim();
+    const awayTeam = teams[1].trim();
+    
+    let stats = {
+      homeTeam,
+      awayTeam,
+      homeStats: null,
+      awayStats: null,
+      h2h: [],
+      recentMatches: []
+    };
+    
+    const baseUrl = sport === 'football' 
+      ? 'https://v3.football.api-sports.io'
+      : sport === 'basketball'
+      ? 'https://v3.basketball.api-sports.io'
+      : 'https://v3.baseball.api-sports.io';
+    
+    // For Football: Get team statistics and H2H
+    if (sport === 'football') {
+      // Search for teams
+      const homeSearch = await fetch(`${baseUrl}/teams?search=${encodeURIComponent(homeTeam)}`, {
+        headers: { 'x-apisports-key': SPORTS_API_KEY }
+      });
+      const homeData = await homeSearch.json();
+      
+      const awaySearch = await fetch(`${baseUrl}/teams?search=${encodeURIComponent(awayTeam)}`, {
+        headers: { 'x-apisports-key': SPORTS_API_KEY }
+      });
+      const awayData = await awaySearch.json();
+      
+      const homeTeamId = homeData.response?.[0]?.team?.id;
+      const awayTeamId = awayData.response?.[0]?.team?.id;
+      
+      if (homeTeamId && awayTeamId) {
+        // Get H2H
+        const h2hRes = await fetch(`${baseUrl}/fixtures/headtohead?h2h=${homeTeamId}-${awayTeamId}&last=5`, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY }
+        });
+        const h2hData = await h2hRes.json();
+        stats.h2h = h2hData.response?.map(m => ({
+          date: m.fixture?.date,
+          home: m.teams?.home?.name,
+          away: m.teams?.away?.name,
+          score: `${m.goals?.home}-${m.goals?.away}`,
+          winner: m.teams?.winner
+        })) || [];
+        
+        // Get team statistics (using current season)
+        const currentSeason = new Date().getFullYear() - 1;
+        const homeStatsRes = await fetch(`${baseUrl}/teams/statistics?team=${homeTeamId}&season=${currentSeason}&league=39`, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY }
+        });
+        const homeStatsData = await homeStatsRes.json();
+        stats.homeStats = homeStatsData.response ? {
+          played: homeStatsData.response.fixtures?.played?.total,
+          wins: homeStatsData.response.fixtures?.wins?.total,
+          draws: homeStatsData.response.fixtures?.draws?.total,
+          loses: homeStatsData.response.fixtures?.loses?.total,
+          goalsFor: homeStatsData.response.goals?.for?.total,
+          goalsAgainst: homeStatsData.response.goals?.against?.total,
+          avgGoalsFor: homeStatsData.response.goals?.for?.average?.total,
+          cleanSheets: homeStatsData.response.clean_sheet?.total,
+          form: homeStatsData.response.form
+        } : null;
+      }
+    }
+    
+    return stats;
+  } catch (error) {
+    console.error("Error fetching match stats:", error);
+    return null;
+  }
+}
 
 function generateMockAnalysis(matchName, sport) {
   const markets = {
@@ -49,8 +134,39 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'match_name is required' });
   }
 
+  // Fetch real statistics from API-Sports
+  const matchStats = await fetchMatchStats(match_name, sport);
+  
   if (!OPENROUTERFREE_API_KEY) {
     return res.status(200).json(generateMockAnalysis(match_name, sport));
+  }
+
+  // Build context with real statistics
+  let statsContext = "";
+  if (matchStats) {
+    statsContext = `\n\n=== DATOS ESTADÍSTICOS REALES ===`;
+    statsContext += `\nEquipos: ${matchStats.homeTeam} vs ${matchStats.awayTeam}`;
+    
+    if (matchStats.homeStats) {
+      statsContext += `\n\nEstadísticas de ${matchStats.homeTeam}:`;
+      statsContext += `\n- Partidos jugados: ${matchStats.homeStats.played || 'N/A'}`;
+      statsContext += `\n- Victorias: ${matchStats.homeStats.wins || 'N/A'} | Empates: ${matchStats.homeStats.draws || 'N/A'} | Derrotas: ${matchStats.homeStats.loses || 'N/A'}`;
+      statsContext += `\n- Goles a favor: ${matchStats.homeStats.goalsFor || 'N/A'} | Goles en contra: ${matchStats.homeStats.goalsAgainst || 'N/A'}`;
+      statsContext += `\n- Promedio goles por partido: ${matchStats.homeStats.avgGoalsFor || 'N/A'}`;
+      statsContext += `\n- Porterías a cero: ${matchStats.homeStats.cleanSheets || 'N/A'}`;
+      if (matchStats.homeStats.form) {
+        statsContext += `\n- Forma reciente: ${matchStats.homeStats.form}`;
+      }
+    }
+    
+    if (matchStats.h2h && matchStats.h2h.length > 0) {
+      statsContext += `\n\nÚltimos enfrentamientos directos (H2H):`;
+      matchStats.h2h.slice(0, 5).forEach(m => {
+        statsContext += `\n- ${m.home} ${m.score} ${m.away}`;
+      });
+    }
+    
+    statsContext += `\n\nUsa estos datos para tu análisis.`;
   }
 
   const SYSTEM_PROMPT = `Eres un experto analista de apuestas deportivas profesional con años de experiencia identificando Value Bets.
@@ -62,8 +178,10 @@ Debes analizar exhaustivamente:
 - Para BASKETBALL: Ganador, Over/Under puntos, Handicaps, Cuartos, Mitades
 - Para BÉISBOL: Ganador, Run Line, Total Carreras, 1er Inning, Hits
 
+IMPORTANTE: Si se te proporcionan DATOS ESTADÍSTICOS REALES, ÚSALOS para fundamentar tu análisis. Menciona números específicos en tu justificación.
+
 Para cada mercado, evalúa:
-1. Probabilidad real basada en estadísticas
+1. Probabilidad real basada en estadísticas (usa los datos proporcionados si están disponibles)
 2. Cuota ofrecida por el mercado
 3. Edge potencial (diferencia entre probabilidad real y cuota implícita)
 
@@ -77,8 +195,9 @@ Devuelve SOLO la mejor Value Bet encontrada en formato JSON:
   "odds": número (cuota decimal),
   "edgePercent": número (porcentaje de ventaja),
   "confidence": número del 1 al 10,
-  "analysisText": "explicación detallada de por qué es value bet, mencionando estadísticas clave, contexto del partido, y análisis de TODOS los mercados evaluados",
-  "status": "pending"
+  "analysisText": "explicación detallada de por qué es value bet, mencionando estadísticas clave SI SE PROPORCIONARON DATOS REALES, contexto del partido, y análisis de TODOS los mercados evaluados",
+  "status": "pending",
+  "hasRealStats": true/false (indica si usaste datos reales)
 }`;
 
   try {
@@ -97,7 +216,8 @@ Devuelve SOLO la mejor Value Bet encontrada en formato JSON:
           { role: "user", content: `Analiza COMPLETAMENTE este partido: ${match_name}.
 Deporte: ${sport}
 Fecha: ${date || 'próximamente'}
-Contexto adicional: ${user_context || 'Ninguno'}
+Contexto adicional del usuario: ${user_context || 'Ninguno'}
+${statsContext}
 
 Analiza TODOS los mercados disponibles y dame la MEJOR Value Bet encontrada con su justificación completa.
 
@@ -113,6 +233,12 @@ IMPORTANTE: Responde SOLO con JSON válido, sin texto adicional.` }
     let content = data.choices[0].message.content;
     content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const analysis = JSON.parse(content);
+    
+    // Add flag if we had real stats
+    if (matchStats && matchStats.homeStats) {
+      analysis.hasRealStats = true;
+    }
+    
     return res.status(200).json(analysis);
   } catch (error) {
     console.error("OpenRouter Error:", error);

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Prediction } from '../types';
-import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2 } from 'lucide-react';
+import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+const STORAGE_KEY = 'coco_vip_predictions';
 
 interface PickCardProps {
   pick: Prediction;
@@ -11,6 +13,31 @@ interface PickCardProps {
 export default function PickCard({ pick, onDetail }: PickCardProps) {
   const [showModal, setShowModal] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const saveToHistory = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const existing: Prediction[] = stored ? JSON.parse(stored) : [];
+      
+      // Check if already saved
+      if (existing.some(p => p.id === pick.id)) {
+        setSaved(true);
+        return;
+      }
+      
+      const newPrediction: Prediction = {
+        ...pick,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([newPrediction, ...existing]));
+      setSaved(true);
+    } catch (error) {
+      console.error("Error saving to history:", error);
+    }
+  };
 
   const getSportEmoji = (sport: string) => {
     switch (sport.toLowerCase()) {
@@ -113,14 +140,37 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex w-full items-center justify-center rounded-xl py-3 text-sm font-bold text-white transition-all active:scale-95"
-            style={{ backgroundColor: '#5E5CE6', boxShadow: '0 2px 8px rgba(94,92,230,0.3)' }}
-          >
-            <BookOpen className="w-4 h-4 mr-2" />
-            Ver Análisis Completo
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={saveToHistory}
+              disabled={saved}
+              className={`flex-1 flex items-center justify-center rounded-xl py-3 text-sm font-bold transition-all active:scale-95 ${
+                saved 
+                  ? 'bg-[#F0FFF4] text-[#34C759] border border-[#34C759]/20' 
+                  : 'bg-white text-[#5E5CE6] border-2 border-[#5E5CE6]'
+              }`}
+            >
+              {saved ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Guardado
+                </>
+              ) : (
+                <>
+                  <Bookmark className="w-4 h-4 mr-2" />
+                  Guardar
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="flex-1 flex items-center justify-center rounded-xl py-3 text-sm font-bold text-white transition-all active:scale-95"
+              style={{ backgroundColor: '#5E5CE6', boxShadow: '0 2px 8px rgba(94,92,230,0.3)' }}
+            >
+              <BookOpen className="w-4 h-4 mr-2" />
+              Ver Análisis
+            </button>
+          </div>
         </div>
       </motion.div>
 
@@ -213,6 +263,29 @@ export default function PickCard({ pick, onDetail }: PickCardProps) {
                     <Clock className="w-3 h-3" />
                     <span>Creado: {new Date(pick.createdAt).toLocaleString('es-ES')}</span>
                   </div>
+
+                  {/* Save Button in Modal */}
+                  <button
+                    onClick={saveToHistory}
+                    disabled={saved}
+                    className={`w-full py-4 font-bold rounded-xl flex items-center justify-center gap-2 transition-all ${
+                      saved 
+                        ? 'bg-[#F0FFF4] text-[#34C759] border border-[#34C759]/20' 
+                        : 'bg-[#34C759] hover:bg-[#2DB94D] text-white'
+                    }`}
+                  >
+                    {saved ? (
+                      <>
+                        <Check className="w-5 h-5" />
+                        Guardado en Historial
+                      </>
+                    ) : (
+                      <>
+                        <Bookmark className="w-5 h-5" />
+                        Guardar en Historial
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             </motion.div>

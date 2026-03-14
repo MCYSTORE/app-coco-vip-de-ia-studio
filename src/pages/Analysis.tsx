@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Calendar, Sparkles, Loader2, TrendingUp, Verified, Info } from 'lucide-react';
+import { Search, Calendar, Sparkles, Loader2, TrendingUp, Verified, Info, Database } from 'lucide-react';
 import { Prediction } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -189,8 +189,16 @@ export default function Analysis() {
                   <h4 className="text-xl font-bold text-[#1D1D1F] leading-tight">{result.selection}</h4>
                   <p className="text-sm text-[#6E6E73]">{result.matchName}</p>
                 </div>
-                <div className="bg-[#F0FFF4] text-[#34C759] px-3 py-1.5 rounded-full text-sm font-bold border border-[#34C759]/20">
-                  +{result.edgePercent.toFixed(1)}% Edge
+                <div className="flex flex-col items-end gap-2">
+                  <div className="bg-[#F0FFF4] text-[#34C759] px-3 py-1.5 rounded-full text-sm font-bold border border-[#34C759]/20">
+                    +{result.edgePercent.toFixed(1)}% Edge
+                  </div>
+                  {result.hasRealStats && (
+                    <div className="bg-[#EEEEFF] text-[#5E5CE6] px-2 py-1 rounded-full text-[10px] font-bold flex items-center gap-1">
+                      <Database className="w-3 h-3" />
+                      Stats Reales
+                    </div>
+                  )}
                 </div>
               </div>
 

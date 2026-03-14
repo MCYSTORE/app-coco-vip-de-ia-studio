@@ -16,6 +16,7 @@ export interface Prediction {
   status: 'pending' | 'won' | 'lost';
   league?: string;
   isLive?: boolean;
+  hasRealStats?: boolean;
 }
 
 export interface UserProfile {
