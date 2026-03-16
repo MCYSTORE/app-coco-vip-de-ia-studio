@@ -97,17 +97,17 @@ export default function Scanner() {
 
   const getSportColor = (sport: string) => {
     switch (sport.toLowerCase()) {
-      case 'football': return '#34C759';
-      case 'basketball': return '#FF9500';
+      case 'football': return 'var(--color-success)';
+      case 'basketball': return 'var(--color-warning)';
       case 'baseball': return '#007AFF';
-      default: return '#5E5CE6';
+      default: return 'var(--color-accent-primary)';
     }
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 8) return '#34C759';
-    if (confidence >= 6) return '#FF9500';
-    return '#FF3B30';
+    if (confidence >= 8) return 'var(--color-success)';
+    if (confidence >= 6) return 'var(--color-warning)';
+    return 'var(--color-danger)';
   };
 
   // Expose analyze function for navigation
@@ -132,10 +132,10 @@ export default function Scanner() {
           animate={{ rotate: 360 }}
           transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
         >
-          <Radar className="w-12 h-12 text-[#5E5CE6]" />
+          <Radar className="w-12 h-12" style={{ color: 'var(--color-accent-primary)' }} />
         </motion.div>
-        <p className="text-[#6E6E73] font-medium mt-4">Iniciando escáner...</p>
-        <p className="text-[#AEAEB2] text-sm mt-1">Conectando con API-Sports</p>
+        <p className="font-medium mt-4" style={{ color: 'var(--color-text-secondary)' }}>Iniciando escáner...</p>
+        <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>Conectando con API-Sports</p>
       </div>
     );
   }
@@ -145,11 +145,11 @@ export default function Scanner() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-[#1D1D1F] flex items-center gap-2">
-            <Radar className="w-7 h-7 text-[#5E5CE6]" />
+          <h2 className="text-2xl font-bold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+            <Radar className="w-7 h-7" style={{ color: 'var(--color-accent-primary)' }} />
             Escáner de Value Bets
           </h2>
-          <p className="text-sm text-[#6E6E73] flex items-center gap-1 mt-1">
+          <p className="text-sm flex items-center gap-1 mt-1" style={{ color: 'var(--color-text-secondary)' }}>
             <Target className="w-3 h-3" />
             Radar de oportunidades en tiempo real
           </p>
@@ -157,21 +157,25 @@ export default function Scanner() {
         <button
           onClick={runScan}
           disabled={scanning}
-          className="p-2 text-[#5E5CE6] hover:bg-[#EEEEFF] rounded-full transition-colors disabled:opacity-50"
+          className="p-2 rounded-full transition-colors disabled:opacity-50"
+          style={{ color: 'var(--color-accent-primary)' }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-bg-secondary)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
         >
           <RefreshCw className={`w-5 h-5 ${scanning ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
       {/* Last Update Badge */}
-      <div className="flex items-center gap-2 text-xs text-[#AEAEB2]">
+      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
         <Clock className="w-3 h-3" />
         <span>Último escaneo: {lastUpdate.toLocaleTimeString('es-ES')}</span>
         {scanning && (
           <motion.span
             animate={{ opacity: [1, 0.5] }}
             transition={{ duration: 0.5, repeat: Infinity }}
-            className="text-[#5E5CE6] font-medium"
+            className="font-medium"
+            style={{ color: 'var(--color-accent-primary)' }}
           >
             • Escaneando...
           </motion.span>
@@ -180,21 +184,21 @@ export default function Scanner() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-2">
-        <div className="bg-white rounded-xl p-3 text-center border border-[#E5E5EA]" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-          <div className="text-xl font-bold text-[#1D1D1F]">{stats.totalMatches}</div>
-          <div className="text-[9px] text-[#AEAEB2] uppercase font-bold">Analizados</div>
+        <div className="rounded-xl p-3 text-center border" style={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+          <div className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>{stats.totalMatches}</div>
+          <div className="text-[9px] uppercase font-bold" style={{ color: 'var(--color-text-muted)' }}>Analizados</div>
         </div>
-        <div className="bg-[#F0FFF4] rounded-xl p-3 text-center border border-[#34C759]/20">
-          <div className="text-xl font-bold text-[#34C759]">{stats.valueBets}</div>
-          <div className="text-[9px] text-[#34C759] uppercase font-bold">Value Bets</div>
+        <div className="rounded-xl p-3 text-center border" style={{ backgroundColor: 'var(--color-success-bg)', borderColor: 'rgba(22, 163, 74, 0.2)' }}>
+          <div className="text-xl font-bold" style={{ color: 'var(--color-success)' }}>{stats.valueBets}</div>
+          <div className="text-[9px] uppercase font-bold" style={{ color: 'var(--color-success)' }}>Value Bets</div>
         </div>
-        <div className="bg-[#EEEEFF] rounded-xl p-3 text-center border border-[#5E5CE6]/20">
-          <div className="text-xl font-bold text-[#5E5CE6]">+{stats.bestEdge.toFixed(1)}%</div>
-          <div className="text-[9px] text-[#5E5CE6] uppercase font-bold">Mejor Edge</div>
+        <div className="rounded-xl p-3 text-center border" style={{ backgroundColor: 'var(--color-bg-secondary)', borderColor: 'rgba(94, 92, 230, 0.2)' }}>
+          <div className="text-xl font-bold" style={{ color: 'var(--color-accent-primary)' }}>+{stats.bestEdge.toFixed(1)}%</div>
+          <div className="text-[9px] uppercase font-bold" style={{ color: 'var(--color-accent-primary)' }}>Mejor Edge</div>
         </div>
-        <div className="bg-[#FFF8F0] rounded-xl p-3 text-center border border-[#FF9500]/20">
-          <div className="text-xl font-bold text-[#FF9500]">{stats.avgConfidence}</div>
-          <div className="text-[9px] text-[#FF9500] uppercase font-bold">Conf. Media</div>
+        <div className="rounded-xl p-3 text-center border" style={{ backgroundColor: 'var(--color-warning-bg)', borderColor: 'rgba(255, 149, 0, 0.2)' }}>
+          <div className="text-xl font-bold" style={{ color: 'var(--color-warning)' }}>{stats.avgConfidence}</div>
+          <div className="text-[9px] uppercase font-bold" style={{ color: 'var(--color-warning)' }}>Conf. Media</div>
         </div>
       </div>
 
@@ -203,10 +207,11 @@ export default function Scanner() {
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-[#EEEEFF] rounded-xl p-4 flex items-center justify-center gap-3"
+          className="rounded-xl p-4 flex items-center justify-center gap-3"
+          style={{ backgroundColor: 'var(--color-bg-secondary)' }}
         >
-          <Loader2 className="w-5 h-5 text-[#5E5CE6] animate-spin" />
-          <span className="text-[#5E5CE6] font-medium">Analizando {stats.totalMatches} partidos...</span>
+          <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'var(--color-accent-primary)' }} />
+          <span className="font-medium" style={{ color: 'var(--color-accent-primary)' }}>Analizando {stats.totalMatches} partidos...</span>
         </motion.div>
       )}
 
@@ -219,9 +224,13 @@ export default function Scanner() {
             onClick={() => setActiveFilter(filter.id)}
             className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all flex items-center gap-2 ${
               activeFilter === filter.id 
-                ? 'bg-[#5E5CE6] text-white' 
-                : 'bg-white text-[#6E6E73] border border-[#E5E5EA]'
+                ? 'text-white' 
+                : 'border'
             }`}
+            style={activeFilter === filter.id 
+              ? { backgroundColor: 'var(--color-accent-primary)' }
+              : { backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-secondary)', borderColor: 'var(--color-border)' }
+            }
           >
             <span>{filter.emoji}</span>
             {filter.name}
@@ -239,12 +248,12 @@ export default function Scanner() {
             exit={{ opacity: 0, y: -20 }}
             className="text-center py-12"
           >
-            <div className="bg-[#F5F5F7] w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="text-[#AEAEB2] w-10 h-10" />
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+              <AlertTriangle className="w-10 h-10" style={{ color: 'var(--color-text-muted)' }} />
             </div>
-            <p className="text-[#1D1D1F] font-semibold text-lg">No se detectaron value bets</p>
-            <p className="text-[#6E6E73] text-sm mt-2">con edge superior a 3% en este momento.</p>
-            <p className="text-[#AEAEB2] text-xs mt-1">El escáner se actualiza automáticamente cada 30 minutos.</p>
+            <p className="font-semibold text-lg" style={{ color: 'var(--color-text-primary)' }}>No se detectaron value bets</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>con edge superior a 3% en este momento.</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>El escáner se actualiza automáticamente cada 30 minutos.</p>
           </motion.div>
         ) : (
           <motion.div
@@ -260,16 +269,16 @@ export default function Scanner() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white rounded-2xl p-4 border border-[#E5E5EA]"
-                style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
+                className="rounded-2xl p-4 border"
+                style={{ backgroundColor: 'var(--color-bg-card)', borderColor: 'var(--color-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}
               >
                 {/* Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{getSportEmoji(result.sport)}</span>
                     <div>
-                      <h4 className="font-bold text-[#1D1D1F]">{result.match_name}</h4>
-                      <p className="text-xs text-[#AEAEB2]">{result.league}</p>
+                      <h4 className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{result.match_name}</h4>
+                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{result.league}</p>
                     </div>
                   </div>
                   <div 
@@ -284,47 +293,47 @@ export default function Scanner() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-4">
                     <div>
-                      <p className="text-[10px] text-[#AEAEB2] uppercase font-bold">Selección</p>
-                      <p className="font-bold text-[#5E5CE6]">{result.selection}</p>
+                      <p className="text-[10px] uppercase font-bold" style={{ color: 'var(--color-text-muted)' }}>Selección</p>
+                      <p className="font-bold" style={{ color: 'var(--color-accent-primary)' }}>{result.selection}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-[#34C759]">+{result.estimated_edge.toFixed(1)}%</div>
-                    <div className="text-[10px] text-[#34C759] uppercase font-bold">Edge</div>
+                    <div className="text-2xl font-bold" style={{ color: 'var(--color-success)' }}>+{result.estimated_edge.toFixed(1)}%</div>
+                    <div className="text-[10px] uppercase font-bold" style={{ color: 'var(--color-success)' }}>Edge</div>
                   </div>
                 </div>
 
                 {/* Odds Shopping Display */}
                 {result.best_odd && result.best_odd > result.odds ? (
-                  <div className="bg-[#F0FFF4] rounded-xl p-3 mb-3 border border-[#34C759]/20">
+                  <div className="rounded-xl p-3 mb-3 border" style={{ backgroundColor: 'var(--color-success-bg)', borderColor: 'rgba(22, 163, 74, 0.2)' }}>
                     <div className="flex items-center gap-2 mb-1">
-                      <ShoppingBag className="w-4 h-4 text-[#34C759]" />
-                      <span className="text-xs font-bold text-[#34C759] uppercase">Mejor cuota disponible</span>
+                      <ShoppingBag className="w-4 h-4" style={{ color: 'var(--color-success)' }} />
+                      <span className="text-xs font-bold uppercase" style={{ color: 'var(--color-success)' }}>Mejor cuota disponible</span>
                     </div>
                     <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold text-[#1D1D1F]">{result.best_odd.toFixed(2)}</span>
-                      <span className="text-sm text-[#6E6E73]">en {result.best_bookmaker}</span>
+                      <span className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>{result.best_odd.toFixed(2)}</span>
+                      <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>en {result.best_bookmaker}</span>
                     </div>
                     {(() => {
                       const extraEdge = calculateExtraEdge(result.best_odd!, result.odds);
                       return extraEdge > 0 ? (
                         <div className="flex items-center gap-1 mt-1">
-                          <ArrowUpRight className="w-3 h-3 text-[#16A34A]" />
-                          <span className="text-xs font-medium text-[#16A34A]">
+                          <ArrowUpRight className="w-3 h-3" style={{ color: 'var(--color-success)' }} />
+                          <span className="text-xs font-medium" style={{ color: 'var(--color-success)' }}>
                             +{extraEdge.toFixed(1)}% edge extra vs cuota base
                           </span>
                         </div>
                       ) : null;
                     })()}
                     {result.all_odds && result.all_odds.length > 1 && (
-                      <p className="text-[10px] text-[#6E6E73] mt-1">
+                      <p className="text-[10px] mt-1" style={{ color: 'var(--color-text-secondary)' }}>
                         {result.all_odds.length - 1} otra{result.all_odds.length > 2 ? 's' : ''} casa{result.all_odds.length > 2 ? 's' : ''} disponible{result.all_odds.length > 2 ? 's' : ''}
                       </p>
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-sm text-[#6E6E73] mb-3">
-                    <span>Cuota: <strong className="text-[#1D1D1F]">{result.odds.toFixed(2)}</strong></span>
+                  <div className="flex items-center justify-between text-sm mb-3" style={{ color: 'var(--color-text-secondary)' }}>
+                    <span>Cuota: <strong style={{ color: 'var(--color-text-primary)' }}>{result.odds.toFixed(2)}</strong></span>
                     <span>@ {result.bookmaker}</span>
                   </div>
                 )}
@@ -332,12 +341,12 @@ export default function Scanner() {
                 {/* Confidence Bar */}
                 <div className="mb-3">
                   <div className="flex justify-between text-[10px] mb-1">
-                    <span className="text-[#AEAEB2]">Confianza</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Confianza</span>
                     <span className="font-bold" style={{ color: getConfidenceColor(result.confidence) }}>
                       {result.confidence}/10
                     </span>
                   </div>
-                  <div className="h-2 bg-[#F5F5F7] rounded-full overflow-hidden">
+                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${result.confidence * 10}%` }}
@@ -349,15 +358,17 @@ export default function Scanner() {
                 </div>
 
                 {/* Analysis Short */}
-                <div className="bg-[#F5F5F7] rounded-xl p-3 mb-3">
-                  <p className="text-sm text-[#6E6E73] italic">"{result.analysis_short}"</p>
+                <div className="rounded-xl p-3 mb-3" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+                  <p className="text-sm italic" style={{ color: 'var(--color-text-secondary)' }}>"{result.analysis_short}"</p>
                 </div>
 
                 {/* Analyze Button */}
                 <button
                   onClick={() => handleAnalyzeMatch(result.match_name)}
-                  className="w-full py-3 bg-[#5E5CE6] hover:bg-[#4B49C8] text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
-                  style={{ boxShadow: '0 2px 8px rgba(94,92,230,0.3)' }}
+                  className="w-full py-3 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                  style={{ backgroundColor: 'var(--color-accent-primary)', boxShadow: '0 2px 8px rgba(94,92,230,0.3)' }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                 >
                   <Search className="w-4 h-4" />
                   Analizar en detalle

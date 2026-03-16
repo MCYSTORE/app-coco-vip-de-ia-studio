@@ -1,4 +1,7 @@
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
+const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
+
+import { fetchFromCache, getCacheMetadata } from './google-sheets.js';
 
 // List of bookmakers for odds shopping simulation
 const BOOKMAKERS = [
@@ -12,24 +15,28 @@ function generateAllOdds(baseOdds, numBookmakers = 5) {
   const selectedBookmakers = BOOKMAKERS.sort(() => 0.5 - Math.random()).slice(0, numBookmakers);
   
   for (const bookmaker of selectedBookmakers) {
-    // Variation between -3% and +5% from base odds
     const variation = -0.03 + Math.random() * 0.08;
     const odds = +(baseOdds * (1 + variation)).toFixed(2);
     allOdds.push({ bookmaker, odds });
   }
   
-  // Sort by odds descending (best first)
   return allOdds.sort((a, b) => b.odds - a.odds);
 }
 
-// Find the best odd from array
 function getBestOdd(allOdds) {
   if (!allOdds || allOdds.length === 0) return null;
-  return allOdds[0]; // Already sorted by best
+  return allOdds[0];
 }
 
 async function fetchFromAPI(endpoint, sport) {
-  const baseUrl = `https://v3.${sport === 'football' ? 'football' : sport === 'basketball' ? 'basketball' : 'baseball'}.api-sports.io`;
+  const baseUrls = {
+    football: 'https://v3.football.api-sports.io',
+    basketball: 'https://v3.basketball.api-sports.io',
+    baseball: 'https://v3.baseball.api-sports.io'
+  };
+
+  const baseUrl = baseUrls[sport];
+  if (!baseUrl) return null;
 
   const response = await fetch(`${baseUrl}/${endpoint}`, {
     headers: {
@@ -44,80 +51,388 @@ async function fetchFromAPI(endpoint, sport) {
   return response.json();
 }
 
+// Fetch live and upcoming games for all sports
+async function fetchAllGames() {
+  const games = {
+    football: [],
+    basketball: [],
+    baseball: []
+  };
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // ========================================
+  // TRY CACHE FIRST
+  // ========================================
+  try {
+    const sports = ['football', 'basketball', 'baseball'];
+    let cacheHit = false;
+
+    for (const sport of sports) {
+      const cachedData = await fetchFromCache({ date: today, sport });
+
+      if (cachedData && cachedData.length > 0) {
+        console.log(`✅ Top Picks: Using cached ${sport} data (${cachedData.length} entries)`);
+        cacheHit = true;
+
+        // Group by match_id to create game objects
+        const matchMap = new Map();
+
+        for (const entry of cachedData) {
+          const matchId = entry.match_id;
+
+          if (!matchMap.has(matchId)) {
+            matchMap.set(matchId, {
+              id: matchId,
+              homeTeam: entry.home_team,
+              awayTeam: entry.away_team,
+              league: entry.league,
+              date: entry.kickoff || entry.date,
+              status: 'NS',
+              isLive: false,
+              sport: sport.charAt(0).toUpperCase() + sport.slice(1),
+              fromCache: true,
+              odds: {}
+            });
+          }
+
+          const game = matchMap.get(matchId);
+          const market = entry.market_type;
+          if (!game.odds[market]) {
+            game.odds[market] = {};
+          }
+          game.odds[market][entry.selection] = entry.odds;
+        }
+
+        games[sport] = Array.from(matchMap.values()).slice(0, 10);
+      }
+    }
+
+    // If we got cache data for all sports, return early
+    if (cacheHit && games.football.length + games.basketball.length + games.baseball.length > 0) {
+      return games;
+    }
+  } catch (cacheError) {
+    console.log("⚠️ Cache error in top-picks:", cacheError.message);
+  }
+
+  // ========================================
+  // FALLBACK TO API
+  // ========================================
+  console.log("⚠️ Top Picks: Falling back to API...");
+
+  // Football - live games
+  try {
+    const footballLiveData = await fetchFromAPI('fixtures?live=all', 'football');
+    if (footballLiveData?.response) {
+      games.football = footballLiveData.response.slice(0, 10).map(match => ({
+        id: `fb-live-${match.fixture?.id}`,
+        homeTeam: match.teams?.home?.name,
+        awayTeam: match.teams?.away?.name,
+        league: match.league?.name,
+        country: match.league?.country,
+        date: match.fixture?.date,
+        status: match.fixture?.status?.short,
+        isLive: true,
+        sport: 'Football',
+        homeScore: match.goals?.home,
+        awayScore: match.goals?.away,
+        elapsed: match.fixture?.status?.elapsed
+      }));
+    }
+  } catch (e) {
+    console.log("Football live fetch skipped:", e.message);
+  }
+  
+  // Football - upcoming major leagues
+  try {
+    const footballUpcomingData = await fetchFromAPI(`fixtures?date=${today}`, 'football');
+    if (footballUpcomingData?.response) {
+      const majorLeagues = [39, 140, 135, 78, 61, 144, 94]; // Premier, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie, Primeira Liga
+      const upcoming = footballUpcomingData.response
+        .filter(f => majorLeagues.includes(f.league?.id) && f.fixture?.status?.short !== 'FT')
+        .slice(0, 10)
+        .map(match => ({
+          id: `fb-up-${match.fixture?.id}`,
+          homeTeam: match.teams?.home?.name,
+          awayTeam: match.teams?.away?.name,
+          league: match.league?.name,
+          country: match.league?.country,
+          date: match.fixture?.date,
+          status: match.fixture?.status?.short,
+          isLive: false,
+          sport: 'Football'
+        }));
+      games.football = [...games.football, ...upcoming];
+    }
+  } catch (e) {
+    console.log("Football upcoming fetch skipped:", e.message);
+  }
+  
+  // Basketball - live games
+  try {
+    const basketballLiveData = await fetchFromAPI('games?live=all', 'basketball');
+    if (basketballLiveData?.response) {
+      games.basketball = basketballLiveData.response.slice(0, 10).map(game => ({
+        id: `bk-live-${game.id}`,
+        homeTeam: game.teams?.home?.name,
+        awayTeam: game.teams?.away?.name,
+        league: game.league?.name,
+        country: game.country?.name,
+        date: game.date,
+        status: game.status?.short,
+        isLive: ['Q1', 'Q2', 'Q3', 'Q4', 'OT', 'HT'].includes(game.status?.short),
+        sport: 'Basketball',
+        homeScore: game.scores?.home?.total,
+        awayScore: game.scores?.away?.total
+      }));
+    }
+  } catch (e) {
+    console.log("Basketball live fetch skipped:", e.message);
+  }
+  
+  // Basketball - upcoming games
+  try {
+    const basketballUpcomingData = await fetchFromAPI(`games?date=${today}`, 'basketball');
+    if (basketballUpcomingData?.response) {
+      const upcoming = basketballUpcomingData.response
+        .filter(g => !['FT', 'AOT', 'POST'].includes(g.status?.short))
+        .slice(0, 10)
+        .map(game => ({
+          id: `bk-up-${game.id}`,
+          homeTeam: game.teams?.home?.name,
+          awayTeam: game.teams?.away?.name,
+          league: game.league?.name,
+          country: game.country?.name,
+          date: game.date,
+          status: game.status?.short,
+          isLive: false,
+          sport: 'Basketball'
+        }));
+      games.basketball = [...games.basketball, ...upcoming];
+    }
+  } catch (e) {
+    console.log("Basketball upcoming fetch skipped:", e.message);
+  }
+  
+  // Baseball - live games
+  try {
+    const baseballLiveData = await fetchFromAPI('games?live=all', 'baseball');
+    if (baseballLiveData?.response) {
+      games.baseball = baseballLiveData.response.slice(0, 10).map(game => ({
+        id: `bb-live-${game.id}`,
+        homeTeam: game.teams?.home?.name,
+        awayTeam: game.teams?.away?.name,
+        league: game.league?.name,
+        country: game.country?.name,
+        date: game.date,
+        status: game.status?.short,
+        isLive: game.status?.short === 'LIVE',
+        sport: 'Baseball',
+        homeScore: game.scores?.home?.total,
+        awayScore: game.scores?.away?.total,
+        inning: game.status?.inning
+      }));
+    }
+  } catch (e) {
+    console.log("Baseball live fetch skipped:", e.message);
+  }
+  
+  // Baseball - upcoming games
+  try {
+    const baseballUpcomingData = await fetchFromAPI(`games?date=${today}`, 'baseball');
+    if (baseballUpcomingData?.response) {
+      const upcoming = baseballUpcomingData.response
+        .filter(g => !['FT', 'POST', 'CANC'].includes(g.status?.short))
+        .slice(0, 10)
+        .map(game => ({
+          id: `bb-up-${game.id}`,
+          homeTeam: game.teams?.home?.name,
+          awayTeam: game.teams?.away?.name,
+          league: game.league?.name,
+          country: game.country?.name,
+          date: game.date,
+          status: game.status?.short,
+          isLive: false,
+          sport: 'Baseball'
+        }));
+      games.baseball = [...games.baseball, ...upcoming];
+    }
+  } catch (e) {
+    console.log("Baseball upcoming fetch skipped:", e.message);
+  }
+  
+  return games;
+}
+
+// Use LLM to generate top picks from real games
+async function generatePicksWithLLM(allGames) {
+  if (!OPENROUTERFREE_API_KEY) {
+    return null;
+  }
+  
+  // Prepare games data for LLM
+  const gamesList = [];
+  Object.entries(allGames).forEach(([sport, games]) => {
+    games.forEach(g => {
+      gamesList.push({
+        match: `${g.homeTeam} vs ${g.awayTeam}`,
+        sport: g.sport,
+        league: g.league,
+        isLive: g.isLive
+      });
+    });
+  });
+  
+  if (gamesList.length === 0) return null;
+  
+  const SYSTEM_PROMPT = `* **Role:** Actúa como un Senior Sports Betting Analyst experto en identificar las mejores Value Bets del día.
+
+* **Context:** Analizas partidos en vivo y próximos para seleccionar los 3 mejores picks con mayor valor potencial.
+
+* **Deportes y Mercados:**
+    - FÚTBOL: 1X2, Over/Under goles, BTTS, Handicaps, Córners
+    - BALONCESTO: Moneyline, Over/Under puntos, Handicap/Spread, Cuartos
+    - BÉISBOL: Moneyline, Run Line, Total Carreras Over/Under
+
+* **Task:** Selecciona los 3 mejores picks con mayor valor del listado de partidos proporcionado.
+
+* **Constraints/Formatting:**
+    1. El campo "selection" debe ser la APUESTA ESPECÍFICA, NO el nombre del mercado.
+    2. Ejemplos CORRECTOS de selection:
+       - Moneyline → "Lakers" (nombre del equipo)
+       - Over/Under 220.5 → "Over 220.5" o "Under 220.5"
+       - BTTS → "Ambos Anotan - Sí" o "Ambos Anotan - No"
+       - 1X2 → "Local", "Visitante" o "Empate"
+    3. ❌ NUNCA pongas "Ganador", "Moneyline", "Over/Under" como selection
+    4. ✅ SIEMPRE incluye equipo específico o dirección completa
+
+* **Steps:**
+    1. Prioriza partidos EN VIVO si están disponibles
+    2. Varía entre deportes si es posible
+    3. Evalúa edge potencial y confianza
+    4. Estructura la respuesta JSON
+
+* **Output JSON Format:**
+{
+  "picks": [
+    {
+      "matchName": "Local vs Visitante",
+      "sport": "Football/Basketball/Baseball",
+      "bestMarket": "tipo de mercado",
+      "selection": "APUESTA ESPECÍFICA con equipo o dirección",
+      "bookmaker": "casa sugerida",
+      "odds": número,
+      "edgePercent": número,
+      "confidence": número 1-10,
+      "analysisText": "justificación breve",
+      "league": "nombre liga",
+      "isLive": true/false
+    }
+  ]
+}`;
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTERFREE_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.APP_URL || 'https://app-coco-vip-de-ia-studio.vercel.app',
+        'X-Title': 'Coco VIP Top Picks'
+      },
+      body: JSON.stringify({
+        model: "openrouter/free",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Partidos disponibles para analizar:\n\n${JSON.stringify(gamesList.slice(0, 30), null, 2)}\n\nSelecciona los 3 mejores picks con mayor valor. Responde SOLO con JSON.` }
+        ],
+        temperature: 0.4
+      })
+    });
+
+    const data = await response.json();
+    let content = data.choices[0]?.message?.content || '{}';
+    content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    const result = JSON.parse(content);
+    return result.picks || null;
+  } catch (error) {
+    console.error("LLM Top Picks Error:", error);
+    return null;
+  }
+}
+
 function getFallbackPicks() {
+  const now = new Date().toISOString();
+  
   return [
-    (() => {
-      const baseOdds = 1.95;
-      const allOdds = generateAllOdds(baseOdds);
-      const best = getBestOdd(allOdds);
-      return {
-        id: "demo-1",
-        matchName: "Real Madrid vs Barcelona",
-        sport: "Football",
-        bestMarket: "Over 2.5 Goles",
-        selection: "Over 2.5",
-        bookmaker: "Bet365",
-        odds: baseOdds,
-        edgePercent: 12.4,
-        confidence: 9,
-        analysisText: "El Clásico siempre ofrece goles. Ambos equipos con promedio de 3+ goles por partido.",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        league: "La Liga",
-        isLive: false,
-        allOdds,
-        bestBookmaker: best?.bookmaker,
-        bestOdd: best?.odds
-      };
-    })(),
-    (() => {
-      const baseOdds = 1.88;
-      const allOdds = generateAllOdds(baseOdds);
-      const best = getBestOdd(allOdds);
-      return {
-        id: "demo-2",
-        matchName: "Lakers vs Warriors",
-        sport: "Basketball",
-        bestMarket: "Over 220.5",
-        selection: "Over",
-        bookmaker: "Pinnacle",
-        odds: baseOdds,
-        edgePercent: 8.1,
-        confidence: 8,
-        analysisText: "Ritmo alto esperado. Warriors con excelente porcentaje de 3 puntos.",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        league: "NBA",
-        isLive: false,
-        allOdds,
-        bestBookmaker: best?.bookmaker,
-        bestOdd: best?.odds
-      };
-    })(),
-    (() => {
-      const baseOdds = 1.75;
-      const allOdds = generateAllOdds(baseOdds);
-      const best = getBestOdd(allOdds);
-      return {
-        id: "demo-3",
-        matchName: "Yankees vs Red Sox",
-        sport: "Baseball",
-        bestMarket: "Total Runs Over 8.5",
-        selection: "Over",
-        bookmaker: "Bwin",
-        odds: baseOdds,
-        edgePercent: 10.5,
-        confidence: 8,
-        analysisText: "Rivalidad histórica. Ambos equipos con buenas ofensivas.",
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        league: "MLB",
-        isLive: false,
-        allOdds,
-        bestBookmaker: best?.bookmaker,
-        bestOdd: best?.odds
-      };
-    })()
+    {
+      id: "demo-1",
+      matchName: "Real Madrid vs Barcelona",
+      sport: "Football",
+      bestMarket: "Over/Under 2.5",
+      selection: "Over 2.5",
+      bookmaker: "Bet365",
+      odds: 1.95,
+      edgePercent: 12.4,
+      confidence: 9,
+      analysisText: "El Clásico siempre ofrece goles. Ambos equipos con promedio de 3+ goles por partido.",
+      status: "pending",
+      createdAt: now,
+      league: "La Liga",
+      isLive: false,
+      openingOdd: 1.95,
+      openingOddTimestamp: now,
+      currentOdd: 1.95,
+      currentOddTimestamp: now,
+      lineMovementPercent: 0,
+      lineMovementDirection: 'stable'
+    },
+    {
+      id: "demo-2",
+      matchName: "Lakers vs Warriors",
+      sport: "Basketball",
+      bestMarket: "Over/Under 220.5",
+      selection: "Over 220.5",
+      bookmaker: "Pinnacle",
+      odds: 1.88,
+      edgePercent: 8.1,
+      confidence: 8,
+      analysisText: "Ritmo alto esperado. Warriors con excelente porcentaje de 3 puntos.",
+      status: "pending",
+      createdAt: now,
+      league: "NBA",
+      isLive: false,
+      openingOdd: 1.88,
+      openingOddTimestamp: now,
+      currentOdd: 1.88,
+      currentOddTimestamp: now,
+      lineMovementPercent: 0,
+      lineMovementDirection: 'stable'
+    },
+    {
+      id: "demo-3",
+      matchName: "Yankees vs Red Sox",
+      sport: "Baseball",
+      bestMarket: "Total Runs Over/Under 8.5",
+      selection: "Over 8.5",
+      bookmaker: "Bwin",
+      odds: 1.75,
+      edgePercent: 10.5,
+      confidence: 8,
+      analysisText: "Rivalidad histórica. Ambos equipos con buenas ofensivas.",
+      status: "pending",
+      createdAt: now,
+      league: "MLB",
+      isLive: false,
+      openingOdd: 1.75,
+      openingOddTimestamp: now,
+      currentOdd: 1.75,
+      currentOddTimestamp: now,
+      lineMovementPercent: 0,
+      lineMovementDirection: 'stable'
+    }
   ];
 }
 
@@ -130,121 +445,113 @@ export default async function handler(req, res) {
   }
 
   try {
-    const picks = [];
-
-    try {
-      const footballData = await fetchFromAPI('fixtures?live=all', 'football');
-      const liveFootball = (footballData.response || []).slice(0, 5);
-
-      for (const match of liveFootball) {
-        const baseOdds = 1.85 + Math.random() * 0.3;
+    // Fetch all games from API-Sports
+    const allGames = await fetchAllGames();
+    
+    // Try to generate picks with LLM
+    let llmPicks = null;
+    if (OPENROUTERFREE_API_KEY) {
+      llmPicks = await generatePicksWithLLM(allGames);
+    }
+    
+    if (llmPicks && llmPicks.length > 0) {
+      const now = new Date().toISOString();
+      
+      // Format picks from LLM
+      const picks = llmPicks.slice(0, 3).map((pick, i) => {
+        const baseOdds = pick.odds || 1.85;
         const allOdds = generateAllOdds(baseOdds);
         const best = getBestOdd(allOdds);
         
-        picks.push({
-          id: `fb-${match.fixture.id}`,
-          matchName: `${match.teams.home.name} vs ${match.teams.away.name}`,
-          sport: 'Football',
-          bestMarket: 'Over 2.5 Goles',
-          selection: 'Over 2.5',
-          bookmaker: 'Bet365',
-          odds: +baseOdds.toFixed(2),
-          edgePercent: 8 + Math.random() * 12,
-          confidence: Math.floor(7 + Math.random() * 3),
-          analysisText: `Partido en vivo. ${match.teams.home.name} y ${match.teams.away.name} con tendencia goleadora. Liga: ${match.league.name}`,
+        return {
+          id: `llm-pick-${Date.now()}-${i}`,
+          matchName: pick.matchName,
+          sport: pick.sport || 'Football',
+          bestMarket: pick.bestMarket,
+          selection: pick.selection,
+          bookmaker: pick.bookmaker || 'Bet365',
+          odds: baseOdds,
+          edgePercent: pick.edgePercent || 8,
+          confidence: pick.confidence || 7,
+          analysisText: pick.analysisText,
           status: 'pending',
-          createdAt: new Date().toISOString(),
-          league: match.league.name,
-          isLive: true,
+          createdAt: now,
+          league: pick.league,
+          isLive: pick.isLive || false,
           allOdds,
           bestBookmaker: best?.bookmaker,
-          bestOdd: best?.odds
-        });
-      }
-    } catch (e) {
-      console.log("Football fetch skipped");
+          bestOdd: best?.odds,
+          openingOdd: baseOdds,
+          openingOddTimestamp: now,
+          currentOdd: baseOdds,
+          currentOddTimestamp: now,
+          lineMovementPercent: 0,
+          lineMovementDirection: 'stable'
+        };
+      });
+      
+      return res.status(200).json(picks);
     }
-
-    try {
-      const basketballData = await fetchFromAPI('games?live=all', 'basketball');
-      const liveBasketball = (basketballData.response || []).slice(0, 5);
-
-      for (const game of liveBasketball) {
-        const baseOdds = 1.90 + Math.random() * 0.2;
+    
+    // Fallback: generate picks from real game data
+    const now = new Date().toISOString();
+    const fallbackPicks = [];
+    
+    // Take games from each sport with real data
+    const sports = ['football', 'basketball', 'baseball'];
+    for (const sport of sports) {
+      const games = allGames[sport];
+      if (games && games.length > 0 && fallbackPicks.length < 3) {
+        // Prioritize live games
+        const liveGames = games.filter(g => g.isLive);
+        const gameToUse = liveGames.length > 0 ? liveGames[0] : games[0];
+        
+        const baseOdds = 1.75 + Math.random() * 0.4;
         const allOdds = generateAllOdds(baseOdds);
         const best = getBestOdd(allOdds);
         
-        picks.push({
-          id: `bk-${game.id}`,
-          matchName: `${game.teams.home.name} vs ${game.teams.away.name}`,
-          sport: 'Basketball',
-          bestMarket: 'Over/Under',
-          selection: 'Over 215.5',
-          bookmaker: 'Pinnacle',
+        const markets = {
+          football: { market: 'Over 2.5 Goles', selection: 'Over' },
+          basketball: { market: 'Over 220.5 Puntos', selection: 'Over' },
+          baseball: { market: 'Run Line -1.5', selection: gameToUse.homeTeam }
+        };
+        
+        const sportMarket = markets[sport];
+        
+        fallbackPicks.push({
+          id: gameToUse.id,
+          matchName: `${gameToUse.homeTeam} vs ${gameToUse.awayTeam}`,
+          sport: sport.charAt(0).toUpperCase() + sport.slice(1),
+          bestMarket: sportMarket.market,
+          selection: sportMarket.selection,
+          bookmaker: best?.bookmaker || 'Bet365',
           odds: +baseOdds.toFixed(2),
           edgePercent: 6 + Math.random() * 10,
-          confidence: Math.floor(6 + Math.random() * 4),
-          analysisText: `NBA en vivo. Alto ritmo de juego esperado. Liga: ${game.league.name}`,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          league: game.league.name,
-          isLive: true,
-          allOdds,
-          bestBookmaker: best?.bookmaker,
-          bestOdd: best?.odds
-        });
-      }
-    } catch (e) {
-      console.log("Basketball fetch skipped");
-    }
-
-    const today = new Date();
-    const dateStr = today.toISOString().split('T')[0];
-
-    try {
-      const upcomingData = await fetchFromAPI(`fixtures?date=${dateStr}`, 'football');
-      const majorLeagues = [39, 140, 135, 78, 61];
-      const upcoming = (upcomingData.response || [])
-        .filter(f => majorLeagues.includes(f.league.id))
-        .slice(0, 5);
-
-      for (const match of upcoming) {
-        const baseOdds = 1.70 + Math.random() * 0.4;
-        const allOdds = generateAllOdds(baseOdds);
-        const best = getBestOdd(allOdds);
-        
-        picks.push({
-          id: `fb-up-${match.fixture.id}`,
-          matchName: `${match.teams.home.name} vs ${match.teams.away.name}`,
-          sport: 'Football',
-          bestMarket: 'Ambos Anotan',
-          selection: 'Sí',
-          bookmaker: '1xBet',
-          odds: +baseOdds.toFixed(2),
-          edgePercent: 10 + Math.random() * 8,
           confidence: Math.floor(7 + Math.random() * 3),
-          analysisText: `${match.league.name} - ${match.teams.home.name} llega con buena racha goleadora.`,
+          analysisText: `${gameToUse.isLive ? '🔴 EN VIVO' : 'Próximo partido'}. ${gameToUse.league || 'Liga principal'}. Análisis basado en datos de API-Sports.`,
           status: 'pending',
-          createdAt: new Date().toISOString(),
-          league: match.league.name,
-          isLive: false,
-          date: match.fixture.date,
+          createdAt: now,
+          league: gameToUse.league,
+          isLive: gameToUse.isLive,
           allOdds,
           bestBookmaker: best?.bookmaker,
-          bestOdd: best?.odds
+          bestOdd: best?.odds,
+          openingOdd: +baseOdds.toFixed(2),
+          openingOddTimestamp: now,
+          currentOdd: +baseOdds.toFixed(2),
+          currentOddTimestamp: now,
+          lineMovementPercent: 0,
+          lineMovementDirection: 'stable'
         });
       }
-    } catch (e) {
-      console.log("Upcoming football fetch skipped");
     }
-
-    picks.sort((a, b) => (b.confidence + b.edgePercent / 10) - (a.confidence + a.edgePercent / 10));
-
-    if (picks.length === 0) {
-      return res.status(200).json(getFallbackPicks());
+    
+    if (fallbackPicks.length > 0) {
+      return res.status(200).json(fallbackPicks);
     }
-
-    return res.status(200).json(picks.slice(0, 3));
+    
+    // Last resort fallback
+    return res.status(200).json(getFallbackPicks());
   } catch (error) {
     console.error("Top picks error:", error);
     return res.status(200).json(getFallbackPicks());

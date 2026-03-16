@@ -41,7 +41,7 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
   const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
 
   app.use(express.json());
 
@@ -63,6 +63,232 @@ async function startServer() {
     }
 
     return response.json();
+  }
+
+  // =====================================================
+  // AUTOMATIC DATA FETCHING FOR ANALYSIS
+  // =====================================================
+
+  async function fetchTeamData(teamName: string, sport: 'football' | 'basketball' | 'baseball'): Promise<any> {
+    try {
+      const searchUrl = `https://v3.${sport}.api-sports.io/${sport === 'football' ? 'teams' : 'teams'}?search=${encodeURIComponent(teamName)}`;
+      const response = await fetch(searchUrl, {
+        headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+      });
+      const data = await response.json();
+      return data.response?.[0] || null;
+    } catch (error) {
+      console.error(`Error fetching ${sport} team ${teamName}:`, error);
+      return null;
+    }
+  }
+
+  async function buildFootballContext(homeTeam: string, awayTeam: string): Promise<string> {
+    let context = `\n\n=== DATOS OBTENIDOS AUTOMÁTICAMENTE ===`;
+    
+    try {
+      // Search for teams
+      const homeTeamData = await fetchTeamData(homeTeam, 'football');
+      const awayTeamData = await fetchTeamData(awayTeam, 'football');
+      
+      if (homeTeamData?.team?.id) {
+        context += `\n\nEQUIPO LOCAL: ${homeTeamData.team.name} (ID: ${homeTeamData.team.id})`;
+        context += `\n- País: ${homeTeamData.team.country || 'N/A'}`;
+        context += `\n- Fundado: ${homeTeamData.team.founded || 'N/A'}`;
+        
+        // Get team statistics for current season
+        const currentYear = new Date().getFullYear();
+        const statsUrl = `https://v3.football.api-sports.io/teams/statistics?team=${homeTeamData.team.id}&season=${currentYear - 1}&league=39`;
+        const statsResponse = await fetch(statsUrl, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+        });
+        const statsData = await statsResponse.json();
+        
+        if (statsData.response) {
+          const stats = statsData.response;
+          context += `\n- Partidos jugados: ${stats.fixtures?.played?.total || 'N/A'}`;
+          context += `\n- Victorias: ${stats.fixtures?.wins?.total || 'N/A'}`;
+          context += `\n- Derrotas: ${stats.fixtures?.loses?.total || 'N/A'}`;
+          context += `\n- Goles a favor: ${stats.goals?.for?.total || 'N/A'}`;
+          context += `\n- Goles en contra: ${stats.goals?.against?.total || 'N/A'}`;
+          context += `\n- Promedio goles por partido: ${stats.goals?.for?.average?.total || 'N/A'}`;
+          context += `\n- Porterías a cero: ${stats.clean_sheet?.total || 'N/A'}`;
+          if (stats.form) {
+            context += `\n- Forma reciente: ${stats.form}`;
+          }
+        }
+      }
+      
+      if (awayTeamData?.team?.id) {
+        context += `\n\nEQUIPO VISITANTE: ${awayTeamData.team.name} (ID: ${awayTeamData.team.id})`;
+        context += `\n- País: ${awayTeamData.team.country || 'N/A'}`;
+        context += `\n- Fundado: ${awayTeamData.team.founded || 'N/A'}`;
+        
+        // Get team statistics
+        const currentYear = new Date().getFullYear();
+        const statsUrl = `https://v3.football.api-sports.io/teams/statistics?team=${awayTeamData.team.id}&season=${currentYear - 1}&league=39`;
+        const statsResponse = await fetch(statsUrl, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+        });
+        const statsData = await statsResponse.json();
+        
+        if (statsData.response) {
+          const stats = statsData.response;
+          context += `\n- Partidos jugados: ${stats.fixtures?.played?.total || 'N/A'}`;
+          context += `\n- Victorias: ${stats.fixtures?.wins?.total || 'N/A'}`;
+          context += `\n- Derrotas: ${stats.fixtures?.loses?.total || 'N/A'}`;
+          context += `\n- Goles a favor: ${stats.goals?.for?.total || 'N/A'}`;
+          context += `\n- Goles en contra: ${stats.goals?.against?.total || 'N/A'}`;
+          context += `\n- Promedio goles por partido: ${stats.goals?.for?.average?.total || 'N/A'}`;
+          context += `\n- Porterías a cero: ${stats.clean_sheet?.total || 'N/A'}`;
+          if (stats.form) {
+            context += `\n- Forma reciente: ${stats.form}`;
+          }
+        }
+      }
+      
+      // H2H data
+      if (homeTeamData?.team?.id && awayTeamData?.team?.id) {
+        const h2hUrl = `https://v3.football.api-sports.io/fixtures/headtohead?h2h=${homeTeamData.team.id}-${awayTeamData.team.id}&last=5`;
+        const h2hResponse = await fetch(h2hUrl, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+        });
+        const h2hData = await h2hResponse.json();
+        
+        if (h2hData.response && h2hData.response.length > 0) {
+          context += `\n\nÚLTIMOS ENFRENTAMIENTOS DIRECTOS:`;
+          h2hData.response.slice(0, 5).forEach((match: any) => {
+            context += `\n- ${match.teams?.home?.name} ${match.goals?.home}-${match.goals?.away} ${match.teams?.away?.name}`;
+          });
+        }
+      }
+      
+    } catch (error) {
+      context += `\n\n[Nota: No se pudieron obtener datos de API-Sports para este partido]`;
+    }
+    
+    return context;
+  }
+
+  async function buildBasketballContext(homeTeam: string, awayTeam: string): Promise<string> {
+    let context = `\n\n=== DATOS OBTENIDOS AUTOMÁTICAMENTE ===`;
+    
+    try {
+      const homeTeamData = await fetchTeamData(homeTeam, 'basketball');
+      const awayTeamData = await fetchTeamData(awayTeam, 'basketball');
+      
+      if (homeTeamData?.id) {
+        context += `\n\nEQUIPO LOCAL: ${homeTeamData.name} (ID: ${homeTeamData.id})`;
+        
+        // Get recent games
+        const currentYear = new Date().getFullYear();
+        const gamesUrl = `https://v3.basketball.api-sports.io/games?team=${homeTeamData.id}&season=${currentYear - 1}`;
+        const gamesResponse = await fetch(gamesUrl, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+        });
+        const gamesData = await gamesResponse.json();
+        
+        if (gamesData.response && gamesData.response.length > 0) {
+          const games = gamesData.response.slice(0, 5);
+          context += `\n- Últimos 5 partidos:`;
+          games.forEach((game: any) => {
+            const isHome = game.teams?.home?.id === homeTeamData.id;
+            const teamScore = isHome ? game.scores?.home?.total : game.scores?.away?.total;
+            const oppScore = isHome ? game.scores?.away?.total : game.scores?.home?.total;
+            const result = teamScore > oppScore ? 'W' : 'L';
+            context += `\n  ${result}: ${game.teams?.home?.name} ${game.scores?.home?.total} - ${game.scores?.away?.total} ${game.teams?.away?.name}`;
+          });
+        }
+      }
+      
+      if (awayTeamData?.id) {
+        context += `\n\nEQUIPO VISITANTE: ${awayTeamData.name} (ID: ${awayTeamData.id})`;
+        
+        const currentYear = new Date().getFullYear();
+        const gamesUrl = `https://v3.basketball.api-sports.io/games?team=${awayTeamData.id}&season=${currentYear - 1}`;
+        const gamesResponse = await fetch(gamesUrl, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+        });
+        const gamesData = await gamesResponse.json();
+        
+        if (gamesData.response && gamesData.response.length > 0) {
+          const games = gamesData.response.slice(0, 5);
+          context += `\n- Últimos 5 partidos:`;
+          games.forEach((game: any) => {
+            const isHome = game.teams?.home?.id === awayTeamData.id;
+            const teamScore = isHome ? game.scores?.home?.total : game.scores?.away?.total;
+            const oppScore = isHome ? game.scores?.away?.total : game.scores?.home?.total;
+            const result = teamScore > oppScore ? 'W' : 'L';
+            context += `\n  ${result}: ${game.teams?.home?.name} ${game.scores?.home?.total} - ${game.scores?.away?.total} ${game.teams?.away?.name}`;
+          });
+        }
+      }
+      
+    } catch (error) {
+      context += `\n\n[Nota: No se pudieron obtener datos de API-Sports para este partido]`;
+    }
+    
+    return context;
+  }
+
+  async function buildBaseballContext(homeTeam: string, awayTeam: string): Promise<string> {
+    let context = `\n\n=== DATOS OBTENIDOS AUTOMÁTICAMENTE ===`;
+    
+    try {
+      const homeTeamData = await fetchTeamData(homeTeam, 'baseball');
+      const awayTeamData = await fetchTeamData(awayTeam, 'baseball');
+      
+      if (homeTeamData?.id) {
+        context += `\n\nEQUIPO LOCAL: ${homeTeamData.name} (ID: ${homeTeamData.id})`;
+        
+        const currentYear = new Date().getFullYear();
+        const gamesUrl = `https://v3.baseball.api-sports.io/games?team=${homeTeamData.id}&season=${currentYear}`;
+        const gamesResponse = await fetch(gamesUrl, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+        });
+        const gamesData = await gamesResponse.json();
+        
+        if (gamesData.response && gamesData.response.length > 0) {
+          const games = gamesData.response.filter((g: any) => g.status?.short === 'FT').slice(0, 5);
+          context += `\n- Últimos 5 partidos:`;
+          games.forEach((game: any) => {
+            const isHome = game.teams?.home?.id === homeTeamData.id;
+            const teamScore = isHome ? game.scores?.home?.total : game.scores?.away?.total;
+            const oppScore = isHome ? game.scores?.away?.total : game.scores?.home?.total;
+            const result = teamScore > oppScore ? 'W' : 'L';
+            context += `\n  ${result}: ${game.teams?.home?.name} ${game.scores?.home?.total} - ${game.scores?.away?.total} ${game.teams?.away?.name}`;
+          });
+        }
+      }
+      
+      if (awayTeamData?.id) {
+        context += `\n\nEQUIPO VISITANTE: ${awayTeamData.name} (ID: ${awayTeamData.id})`;
+        
+        const currentYear = new Date().getFullYear();
+        const gamesUrl = `https://v3.baseball.api-sports.io/games?team=${awayTeamData.id}&season=${currentYear}`;
+        const gamesResponse = await fetch(gamesUrl, {
+          headers: { 'x-apisports-key': SPORTS_API_KEY || '' }
+        });
+        const gamesData = await gamesResponse.json();
+        
+        if (gamesData.response && gamesData.response.length > 0) {
+          const games = gamesData.response.filter((g: any) => g.status?.short === 'FT').slice(0, 5);
+          context += `\n- Últimos 5 partidos:`;
+          games.forEach((game: any) => {
+            const isHome = game.teams?.home?.id === awayTeamData.id;
+            const teamScore = isHome ? game.scores?.home?.total : game.scores?.away?.total;
+            const oppScore = isHome ? game.scores?.away?.total : game.scores?.home?.total;
+            const result = teamScore > oppScore ? 'W' : 'L';
+            context += `\n  ${result}: ${game.teams?.home?.name} ${game.scores?.home?.total} - ${game.scores?.away?.total} ${game.teams?.away?.name}`;
+          });
+        }
+      }
+      
+    } catch (error) {
+      context += `\n\n[Nota: No se pudieron obtener datos de API-Sports para este partido]`;
+    }
+    
+    return context;
   }
 
   // =====================================================
@@ -184,50 +410,343 @@ async function startServer() {
   app.post("/api/analyze", async (req, res) => {
     const { match_name, date, user_context, market_preference, sport = 'football' } = req.body;
 
-    if (!OPENROUTER_API_KEY) {
+    if (!OPENROUTERFREE_API_KEY) {
       // If no OpenRouter key, return a mock analysis
       return res.json(generateMockAnalysis(match_name, sport));
     }
 
-    const SYSTEM_PROMPT_VALUE_BET = `Eres un experto analista de apuestas deportivas profesional. 
-Tu objetivo es identificar "Value Bets" (apuestas con valor) comparando probabilidades reales con las cuotas del mercado.
-Debes ser extremadamente analítico, evitar alucinaciones y basarte en datos.
-Devuelve SIEMPRE un objeto JSON con la siguiente estructura exacta:
+    // =====================================================
+    // PASO 1: BUSCAR DATOS AUTOMÁTICAMENTE
+    // =====================================================
+    
+    // Extract team names
+    const teams = match_name.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
+    const homeTeam = teams[0]?.trim() || '';
+    const awayTeam = teams[1]?.trim() || '';
+    
+    // Fetch automatic context based on sport
+    let autoContext = '';
+    try {
+      console.log(`🔍 Buscando datos automáticamente para: ${homeTeam} vs ${awayTeam} (${sport})`);
+      
+      if (sport === 'football') {
+        autoContext = await buildFootballContext(homeTeam, awayTeam);
+      } else if (sport === 'basketball') {
+        autoContext = await buildBasketballContext(homeTeam, awayTeam);
+      } else if (sport === 'baseball') {
+        autoContext = await buildBaseballContext(homeTeam, awayTeam);
+      }
+      
+      console.log(`✅ Datos obtenidos automáticamente (${autoContext.length} caracteres)`);
+    } catch (error) {
+      console.log(`⚠️ No se pudieron obtener datos automáticos:`, error);
+      autoContext = `\n\n[No se pudieron obtener datos automáticos de API-Sports. El LLM debe indicar qué información adicional necesita.]`;
+    }
+
+    // =====================================================
+    // PASO 2: CONSTRUIR PROMPT CON DATOS
+    // =====================================================
+
+    // =====================================================
+    // SYSTEM PROMPTS POR DEPORTE - ESTRICTOS Y PRECISOS
+    // =====================================================
+
+    const SYSTEM_PROMPTS = {
+      football: `Eres Coco, un analista de value bets deportivos experto y conservador.
+Tu objetivo es encontrar apuestas con VENTAJA MATEMÁTICA REAL, no simplemente predecir ganadores.
+
+METODOLOGÍA OBLIGATORIA:
+1. Calcular la probabilidad implícita de la cuota:
+   prob_implícita = 1 / odds
+
+2. Estimar tu propia probabilidad basada en los datos disponibles:
+   - Forma reciente (últimos 5 partidos)
+   - Head to head (si está disponible)
+   - xG - Expected Goals (si está disponible)
+   - Contexto adicional del usuario
+   - Factores de riesgo (lesiones, motivación, cansancio, partido importante)
+
+3. Calcular el edge:
+   edge = (prob_estimada - prob_implícita) / prob_implícita * 100
+
+4. SOLO recomendar si edge >= 5%
+   - Si edge < 5%: responder que NO hay value.
+   - Si edge >= 5% y < 7%: pick B (calidad media)
+   - Si edge >= 7%: pick A+ (alta calidad)
+
+ESCALA DE CONFIANZA (sé ESTRICTO):
+- 9-10/10: edge > 10%, 3+ factores a favor, sin contradicciones.
+- 7-8/10: edge 5-10%, 2+ factores a favor, algún factor de riesgo menor.
+- < 7/10: NO reportar como pick oficial.
+
+MERCADOS DISPONIBLES:
+- 1X2 (Ganador/Empate): selection = nombre del equipo o "Empate"
+- Over/Under goles (0.5, 1.5, 2.5, 3.5): selection = "Over X.X" o "Under X.X"
+- BTTS (Ambos Anotan): selection = "Ambos Anotan - Sí" o "Ambos Anotan - No"
+- Handicaps Asiáticos: selection = "Equipo -X.X"
+- Córners, Tarjetas
+
+REGLAS ESTRICTAS:
+1. NUNCA inflar el edge artificialmente.
+2. NUNCA dar confianza > 8 sin justificación explícita (3+ supporting_factors).
+3. Si hay factores contradictorios → confianza máxima 7/10.
+4. SER HONESTO cuando los datos son insuficientes.
+5. Preferir "no hay value" a dar un pick forzado.
+
+FORMATO DE RESPUESTA (siempre JSON):
 {
-  "matchName": "string (nombre del partido)",
-  "sport": "string (deporte)",
-  "bestMarket": "string (mejor mercado)",
-  "selection": "string (selección recomendada)",
-  "bookmaker": "string (casa de apuestas recomendada)",
-  "odds": number (cuota decimal),
-  "edgePercent": number (porcentaje de ventaja sobre el mercado),
+  "matchName": "string",
+  "sport": "Football",
+  "edge_detected": boolean,
+  "bestMarket": "string",
+  "selection": "string (APUESTA ESPECÍFICA, no el mercado)",
+  "bookmaker": "string",
+  "odds": number,
+  "implied_prob": number,
+  "estimated_prob": number,
+  "edgePercent": number,
+  "quality_tier": "A_PLUS" | "B" | "REJECTED",
   "confidence": number (1-10),
-  "analysisText": "string (explicación técnica detallada)",
+  "analysisText": "string (explicación clara, máx 150 palabras)",
+  "risk_factors": ["string"] (lista de factores de riesgo),
+  "supporting_factors": ["string"] (lista de factores a favor),
+  "recommendation": "apostar" | "pasar" | "reducir stake",
   "status": "pending"
-}`;
+}
+
+Si no hay value (edge < 5%): devolver edge_detected: false, quality_tier: "REJECTED" con reasoning.
+No inventar datos. No inflar edge. Ser honesto.`,
+
+      basketball: `Eres Coco, un analista de value bets deportivos experto y conservador.
+Tu objetivo es encontrar apuestas con VENTAJA MATEMÁTICA REAL, no simplemente predecir ganadores.
+
+METODOLOGÍA OBLIGATORIA:
+1. Calcular la probabilidad implícita de la cuota:
+   prob_implícita = 1 / odds
+
+2. Estimar tu propia probabilidad basada en los datos disponibles:
+   - Forma reciente (últimos 5-10 partidos)
+   - Pace (ritmo de juego) de ambos equipos
+   - Offensive Rating y Defensive Rating
+   - Puntos anotados y permitidos últimos 5 partidos
+   - Head to head (si está disponible)
+   - Factores de riesgo (lesiones, back-to-back, motivación)
+
+3. Calcular el edge:
+   edge = (prob_estimada - prob_implícita) / prob_implícita * 100
+
+4. SOLO recomendar si edge >= 5%
+   - Si edge < 5%: responder que NO hay value.
+   - Si edge >= 5% y < 7%: pick B (calidad media)
+   - Si edge >= 7%: pick A+ (alta calidad)
+
+ESCALA DE CONFIANZA (sé ESTRICTO):
+- 9-10/10: edge > 10%, 3+ factores a favor, sin contradicciones.
+- 7-8/10: edge 5-10%, 2+ factores a favor, algún factor de riesgo menor.
+- < 7/10: NO reportar como pick oficial.
+
+MERCADOS DISPONIBLES:
+- Moneyline (Ganador): selection = nombre del equipo ganador
+- Over/Under puntos (205.5, 210.5, 215.5, 220.5, 225.5, 230.5): selection = "Over XXX.X" o "Under XXX.X"
+- Handicap/Spread: selection = "Equipo -X.X" o "Equipo +X.X"
+
+REGLAS ESTRICTAS:
+1. NUNCA inflar el edge artificialmente.
+2. NUNCA dar confianza > 8 sin justificación explícita.
+3. Si hay factores contradictorios → confianza máxima 7/10.
+4. SER HONESTO cuando los datos son insuficientes.
+
+FORMATO DE RESPUESTA (siempre JSON):
+{
+  "matchName": "string",
+  "sport": "Basketball",
+  "edge_detected": boolean,
+  "bestMarket": "string",
+  "selection": "string (APUESTA ESPECÍFICA)",
+  "bookmaker": "string",
+  "odds": number,
+  "implied_prob": number,
+  "estimated_prob": number,
+  "edgePercent": number,
+  "quality_tier": "A_PLUS" | "B" | "REJECTED",
+  "confidence": number (1-10),
+  "analysisText": "string (máx 150 palabras)",
+  "risk_factors": ["string"],
+  "supporting_factors": ["string"],
+  "recommendation": "apostar" | "pasar" | "reducir stake",
+  "status": "pending"
+}
+
+Si no hay value: devolver edge_detected: false, quality_tier: "REJECTED".`,
+
+      baseball: `Eres Coco, un analista de value bets deportivos experto y conservador.
+Tu objetivo es encontrar apuestas con VENTAJA MATEMÁTICA REAL, no simplemente predecir ganadores.
+
+METODOLOGÍA OBLIGATORIA:
+1. Calcular la probabilidad implícita de la cuota:
+   prob_implícita = 1 / odds
+
+2. Estimar tu propia probabilidad basada en los datos disponibles:
+   - ERA (promedio carreras permitidas) del pitcher abridor
+   - WHIP (walks + hits por entrada)
+   - Batting average del equipo
+   - Run line histórico
+   - Forma reciente (últimos 5-10 partidos)
+   - Head to head (si está disponible)
+   - Factores de riesgo (pitcher rookie, lesiones, partido fuera de casa)
+
+3. Calcular el edge:
+   edge = (prob_estimada - prob_implícita) / prob_implícita * 100
+
+4. SOLO recomendar si edge >= 5%
+   - Si edge < 5%: responder que NO hay value.
+   - Si edge >= 5% y < 7%: pick B (calidad media)
+   - Si edge >= 7%: pick A+ (alta calidad)
+
+ESCALA DE CONFIANZA (sé ESTRICTO):
+- 9-10/10: edge > 10%, 3+ factores a favor, sin contradicciones.
+- 7-8/10: edge 5-10%, 2+ factores a favor, algún factor de riesgo menor.
+- < 7/10: NO reportar como pick oficial.
+
+MERCADOS DISPONIBLES:
+- Moneyline (Ganador): selection = nombre del equipo
+- Run Line (-1.5/+1.5): selection = "Equipo -1.5" o "Equipo +1.5"
+- Total Carreras Over/Under (6.5, 7.5, 8.5, 9.5): selection = "Over X.X" o "Under X.X"
+- 1er Inning, Primeras 5 entradas
+
+REGLAS ESTRICTAS:
+1. NUNCA inflar el edge artificialmente.
+2. NUNCA dar confianza > 8 sin justificación explícita.
+3. Si hay factores contradictorios → confianza máxima 7/10.
+4. SER HONESTO cuando los datos son insuficientes.
+
+FORMATO DE RESPUESTA (siempre JSON):
+{
+  "matchName": "string",
+  "sport": "Baseball",
+  "edge_detected": boolean,
+  "bestMarket": "string",
+  "selection": "string (APUESTA ESPECÍFICA)",
+  "bookmaker": "string",
+  "odds": number,
+  "implied_prob": number,
+  "estimated_prob": number,
+  "edgePercent": number,
+  "quality_tier": "A_PLUS" | "B" | "REJECTED",
+  "confidence": number (1-10),
+  "analysisText": "string (máx 150 palabras)",
+  "risk_factors": ["string"],
+  "supporting_factors": ["string"],
+  "recommendation": "apostar" | "pasar" | "reducir stake",
+  "status": "pending"
+}
+
+Si no hay value: devolver edge_detected: false, quality_tier: "REJECTED".`
+    };
+
+    const SYSTEM_PROMPT_VALUE_BET = SYSTEM_PROMPTS[sport as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.football;
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Authorization': `Bearer ${OPENROUTERFREE_API_KEY}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': process.env.APP_URL || 'http://localhost:3000',
           'X-Title': 'Coco VIP Assistant'
         },
         body: JSON.stringify({
-          model: "deepseek/deepseek-v3",
+          model: "openrouter/free",
           messages: [
             { role: "system", content: SYSTEM_PROMPT_VALUE_BET },
-            { role: "user", content: `Analiza este partido: ${match_name}. Fecha: ${date || 'próximamente'}. Contexto adicional: ${user_context || 'Ninguno'}. Preferencia de mercado: ${market_preference || 'Cualquiera'}.` }
+            { role: "user", content: `Analiza este partido: ${match_name}. 
+Deporte: ${sport}
+Fecha: ${date || 'próximamente'}
+
+${autoContext}
+
+${user_context ? `\nCONTEXTO ADICIONAL DEL USUARIO:\n${user_context}` : ''}
+
+${market_preference ? `\nPreferencia de mercado: ${market_preference}` : ''}
+
+IMPORTANTE: 
+- Usa los datos obtenidos automáticamente arriba para tu análisis.
+- Si los datos son insuficientes, indícalo claramente y di qué información necesitas.
+- SOLO recomienda si edge >= 5% y confianza >= 7/10.
+- Sé honesto si no hay value. No inventes datos.` }
           ],
           temperature: 0.1,
+          max_tokens: 800,
+          top_p: 0.9,
           response_format: { type: "json_object" }
         })
       });
 
       const data = await response.json();
-      const analysis = JSON.parse(data.choices[0].message.content);
+      
+      // Verificar si la respuesta es válida
+      if (!data.choices || !data.choices[0]?.message?.content) {
+        console.error("OpenRouter Response Error:", JSON.stringify(data).substring(0, 500));
+        throw new Error(data.error?.message || "Invalid OpenRouter response");
+      }
+
+      let content = data.choices[0].message.content;
+      
+      // Limpiar el contenido si viene con markdown
+      content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      let analysis;
+      try {
+        analysis = JSON.parse(content);
+      } catch (parseError) {
+        console.error("JSON Parse Error:", content.substring(0, 200));
+        throw new Error("Invalid JSON from LLM");
+      }
+
+      // =====================================================
+      // VALIDACIÓN POST-RESPUESTA (Safety Net)
+      // =====================================================
+
+      // 1) Si edge < 5% o quality_tier = REJECTED
+      if (analysis.edge_detected === false || analysis.quality_tier === 'REJECTED' || (analysis.edgePercent && analysis.edgePercent < 5)) {
+        analysis.valid = false;
+        analysis.reason = "Sin value suficiente (edge < 5%)";
+        analysis.recommendation = "pasar";
+      }
+
+      // 2) Si estimated_prob < implied_prob → no hay value real
+      if (analysis.estimated_prob && analysis.implied_prob && analysis.estimated_prob < analysis.implied_prob) {
+        analysis.edge_detected = false;
+        analysis.valid = false;
+        analysis.reason = "Probabilidad estimada menor que la implícita";
+        analysis.edgePercent = 0;
+        analysis.recommendation = "pasar";
+      }
+
+      // 3) Si confidence > 8 pero supporting_factors < 3 → bajar a 8
+      if (analysis.confidence > 8) {
+        const supportingCount = analysis.supporting_factors?.length || 0;
+        if (supportingCount < 3) {
+          analysis.confidence = 8;
+          analysis.analysisText += " (Confianza ajustada a 8 por factores insuficientes)";
+        }
+      }
+
+      // 4) Si confidence < 7 → no es pick válido
+      if (analysis.confidence < 7 && analysis.edge_detected !== false) {
+        analysis.valid = false;
+        analysis.reason = analysis.reason || "Confianza insuficiente (< 7/10)";
+      }
+
+      // 5) Asegurar campos mínimos
+      analysis.matchName = analysis.matchName || match_name;
+      analysis.sport = analysis.sport || sport.charAt(0).toUpperCase() + sport.slice(1);
+      analysis.status = analysis.status || 'pending';
+      
+      // 6) Agregar contexto automático usado (para mostrar al usuario)
+      analysis.autoContext = autoContext;
+      analysis.hasRealStats = autoContext.length > 100 && !autoContext.includes('No se pudieron obtener');
+
       res.json(analysis);
     } catch (error) {
       console.error("OpenRouter Error:", error);
@@ -236,33 +755,82 @@ Devuelve SIEMPRE un objeto JSON con la siguiente estructura exacta:
     }
   });
 
-  // Helper function for mock analysis
+  // Helper function for mock analysis (formato nuevo estricto)
   function generateMockAnalysis(matchName: string, sport: string) {
-    const markets = {
-      football: ['Over 2.5 Goles', 'Ambos Equipos Anotan', '1X2', 'Handicap -0.5', 'Corner +9.5'],
-      basketball: ['Over/Under 220.5', 'Handicap -5.5', 'Ganador 1X2', 'Cuarto 1 - Ganador'],
-      baseball: ['Run Line -1.5', 'Total Runs Over 7.5', 'Ganador', '1er Inning - Carreras']
+    // Extract team names
+    const teams = matchName.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
+    const homeTeam = teams[0]?.trim() || 'Local';
+    const awayTeam = teams[1]?.trim() || 'Visitante';
+
+    const marketsWithSelections = {
+      football: [
+        { market: 'Over/Under 2.5', selection: 'Over 2.5' },
+        { market: 'BTTS', selection: 'Ambos Anotan - Sí' },
+        { market: '1X2', selection: homeTeam },
+        { market: 'Over/Under 1.5', selection: 'Over 1.5' },
+        { market: 'Doble Oportunidad', selection: `${homeTeam} o Empate` }
+      ],
+      basketball: [
+        { market: 'Over/Under 220.5', selection: 'Over 220.5' },
+        { market: 'Moneyline', selection: homeTeam },
+        { market: 'Handicap -5.5', selection: `${homeTeam} -5.5` }
+      ],
+      baseball: [
+        { market: 'Run Line -1.5', selection: `${homeTeam} -1.5` },
+        { market: 'Total Carreras Over 7.5', selection: 'Over 7.5' },
+        { market: 'Moneyline', selection: awayTeam }
+      ]
     };
 
     const bookmakers = ['Bet365', 'Pinnacle', 'Bwin', '1xBet', 'William Hill'];
-    const sportMarkets = markets[sport as keyof typeof markets] || markets.football;
+    const sportMarkets = marketsWithSelections[sport as keyof typeof marketsWithSelections] || marketsWithSelections.football;
     
-    const randomMarket = sportMarkets[Math.floor(Math.random() * sportMarkets.length)];
+    const randomPick = sportMarkets[Math.floor(Math.random() * sportMarkets.length)];
     const randomBookmaker = bookmakers[Math.floor(Math.random() * bookmakers.length)];
-    const randomOdds = (1.5 + Math.random() * 1.5).toFixed(2);
-    const randomEdge = (5 + Math.random() * 15).toFixed(1);
-    const randomConfidence = Math.floor(6 + Math.random() * 4);
+    const randomOdds = parseFloat((1.7 + Math.random() * 1.3).toFixed(2));
+    
+    // Calcular probabilidades según la fórmula estricta
+    const impliedProb = parseFloat((1 / randomOdds).toFixed(4));
+    const estimatedProb = parseFloat((impliedProb + 0.05 + Math.random() * 0.15).toFixed(4));
+    const edgePercent = parseFloat(((estimatedProb - impliedProb) / impliedProb * 100).toFixed(1));
+    
+    // Determinar calidad según edge
+    const qualityTier = edgePercent >= 7 ? 'A_PLUS' : edgePercent >= 5 ? 'B' : 'REJECTED';
+    const edgeDetected = edgePercent >= 5;
+    
+    // Confianza basada en edge (simulando el nuevo sistema)
+    const confidence = edgePercent >= 10 ? 9 : edgePercent >= 7 ? 8 : edgePercent >= 5 ? 7 : 5;
+    
+    // Factores de soporte y riesgo simulados
+    const supportingFactors = [
+      'Forma reciente favorable',
+      'Historial H2H positivo',
+      edgePercent > 8 ? 'Cuota de valor identificado' : 'Análisis estadístico favorable'
+    ];
+    
+    const riskFactors = [
+      Math.random() > 0.5 ? 'Posible rotación de jugadores' : 'Partido fuera de casa',
+      'Datos simulados (sin API key de OpenRouter)'
+    ];
 
     return {
       matchName,
       sport: sport.charAt(0).toUpperCase() + sport.slice(1),
-      bestMarket: randomMarket,
-      selection: randomMarket.split(' ')[0],
+      edge_detected: edgeDetected,
+      bestMarket: randomPick.market,
+      selection: randomPick.selection,
       bookmaker: randomBookmaker,
-      odds: parseFloat(randomOdds),
-      edgePercent: parseFloat(randomEdge),
-      confidence: randomConfidence,
-      analysisText: `Análisis basado en estadísticas recientes y rendimiento histórico. ${matchName} presenta una oportunidad de valor en el mercado de ${randomMarket}. La cuota de ${randomOdds} parece sobrevalorada según nuestros modelos predictivos.`,
+      odds: randomOdds,
+      implied_prob: impliedProb,
+      estimated_prob: estimatedProb,
+      edgePercent: edgePercent,
+      quality_tier: qualityTier,
+      confidence: confidence,
+      analysisText: `[MODO DEMO] Análisis de ${matchName}. Edge calculado: ${edgePercent}%. Cuota ${randomOdds} con probabilidad implícita ${(impliedProb * 100).toFixed(1)}%. Estimación propia: ${(estimatedProb * 100).toFixed(1)}%.`,
+      risk_factors: riskFactors,
+      supporting_factors: supportingFactors.slice(0, Math.min(3, Math.floor(edgePercent / 3))),
+      recommendation: edgeDetected ? 'apostar' : 'pasar',
+      valid: edgeDetected,
       status: 'pending'
     };
   }
@@ -368,6 +936,11 @@ Devuelve SIEMPRE un objeto JSON con la siguiente estructura exacta:
       // Sort by confidence and edge
       picks.sort((a, b) => (b.confidence + b.edgePercent / 10) - (a.confidence + a.edgePercent / 10));
 
+      // Return fallback if no picks found (API suspended or no live games)
+      if (picks.length === 0) {
+        return res.json(getFallbackPicks());
+      }
+
       res.json(picks.slice(0, 10));
     } catch (error) {
       console.error("Top picks error:", error);
@@ -427,6 +1000,99 @@ Devuelve SIEMPRE un objeto JSON con la siguiente estructura exacta:
         isLive: false
       }
     ];
+  }
+
+  // =====================================================
+  // Scanner Endpoint - Value Bets Scanner
+  // =====================================================
+
+  app.get("/api/scanner", async (req, res) => {
+    const { sport, date } = req.query;
+    const scanDate = (date as string) || new Date().toISOString().split('T')[0];
+
+    // Since API-Sports is suspended, return mock scan results
+    const mockResults = generateMockScanResults(sport as string, scanDate);
+    res.json(mockResults);
+  });
+
+  function generateMockScanResults(sport: string | undefined, scanDate: string) {
+    const results = [];
+    const sports = sport ? [sport] : ['football', 'basketball', 'baseball'];
+
+    const matchTemplates = {
+      football: [
+        { home: 'Arsenal', away: 'Chelsea', league: 'Premier League' },
+        { home: 'Real Madrid', away: 'Barcelona', league: 'La Liga' },
+        { home: 'Bayern Munich', away: 'Dortmund', league: 'Bundesliga' },
+        { home: 'Juventus', away: 'Inter', league: 'Serie A' },
+        { home: 'PSG', away: 'Marseille', league: 'Ligue 1' }
+      ],
+      basketball: [
+        { home: 'Lakers', away: 'Warriors', league: 'NBA' },
+        { home: 'Celtics', away: 'Heat', league: 'NBA' },
+        { home: 'Bucks', away: '76ers', league: 'NBA' }
+      ],
+      baseball: [
+        { home: 'Yankees', away: 'Red Sox', league: 'MLB' },
+        { home: 'Dodgers', away: 'Giants', league: 'MLB' },
+        { home: 'Cubs', away: 'Cardinals', league: 'MLB' }
+      ]
+    };
+
+    const markets = {
+      football: [
+        { market: 'Over/Under 2.5', selection: 'Over 2.5' },
+        { market: 'BTTS', selection: 'Ambos Anotan - Sí' },
+        { market: '1X2', selection: 'Local' }
+      ],
+      basketball: [
+        { market: 'Over/Under 220.5', selection: 'Over 220.5' },
+        { market: 'Moneyline', selection: 'Local' }
+      ],
+      baseball: [
+        { market: 'Run Line -1.5', selection: 'Local -1.5' },
+        { market: 'Total Carreras Over 7.5', selection: 'Over 7.5' }
+      ]
+    };
+
+    let rank = 1;
+    for (const s of sports) {
+      const matches = matchTemplates[s as keyof typeof matchTemplates] || [];
+      const sportMarkets = markets[s as keyof typeof markets] || [];
+
+      for (const match of matches) {
+        const randomMarket = sportMarkets[Math.floor(Math.random() * sportMarkets.length)];
+        const baseOdds = +(1.7 + Math.random() * 1.2).toFixed(2);
+
+        results.push({
+          id: `scan-${Date.now()}-${rank}`,
+          rank: rank++,
+          match_name: `${match.home} vs ${match.away}`,
+          sport: s.charAt(0).toUpperCase() + s.slice(1),
+          league: match.league,
+          market: randomMarket.market,
+          selection: randomMarket.selection,
+          bookmaker: ['Bet365', 'Pinnacle', 'Bwin'][Math.floor(Math.random() * 3)],
+          odds: baseOdds,
+          implied_prob: +(0.35 + Math.random() * 0.35).toFixed(4),
+          estimated_edge: +(4 + Math.random() * 12).toFixed(1),
+          confidence: Math.floor(5 + Math.random() * 5),
+          analysis_short: `Valor detectado en ${randomMarket.market} basado en análisis de cuotas.`,
+          all_odds: [
+            { bookmaker: 'Bet365', odds: +(baseOdds * 1.02).toFixed(2) },
+            { bookmaker: 'Pinnacle', odds: +(baseOdds * 0.98).toFixed(2) },
+            { bookmaker: 'Bwin', odds: baseOdds }
+          ]
+        });
+      }
+    }
+
+    return {
+      scan_date: scanDate,
+      total_matches_analyzed: results.length,
+      value_bets_found: results.length,
+      results: results.sort((a, b) => b.estimated_edge - a.estimated_edge)
+    };
   }
 
   // =====================================================

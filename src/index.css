@@ -1,40 +1,276 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+/* ===========================================
+   COCO VIP - MINIMALIST PREMIUM THEME
+   =========================================== */
 
 @theme {
-  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
-  /* Nueva paleta premium */
-  --color-accent: #5E5CE6;
-  --color-accent-hover: #4B49C8;
-  --color-accent-soft: #EEEEFF;
-  --color-bg-app: #F5F5F7;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* === MODO CLARO (Default) === */
+  --color-bg-primary: #FAFAFA;
+  --color-bg-secondary: #F4F4F5;
   --color-bg-card: #FFFFFF;
-  --color-bg-card-dark: #1C1C1E;
-  --color-text-primary: #1D1D1F;
-  --color-text-secondary: #6E6E73;
-  --color-text-muted: #AEAEB2;
-  --color-border: #E5E5EA;
-  --color-success: #34C759;
-  --color-success-bg: #F0FFF4;
-  --color-error: #FF3B30;
-  --color-error-bg: #FFF1F0;
-  --color-warning: #FF9500;
-  --color-warning-bg: #FFF8F0;
+  
+  --color-accent-primary: #18181B;
+  --color-accent-secondary: #3F3F46;
+  --color-accent-gold: #D4AF37;
+  
+  --color-text-primary: #18181B;
+  --color-text-secondary: #52525B;
+  --color-text-muted: #A1A1AA;
+  
+  --color-border: #E4E4E7;
+  
+  --color-success: #16A34A;
+  --color-success-bg: #DCFCE7;
+  --color-danger: #DC2626;
+  --color-danger-bg: #FEE2E2;
+  --color-warning: #D97706;
+  --color-warning-bg: #FEF3C7;
+  
+  --color-badge-bg: #18181B;
+  --color-badge-text: #FAFAFA;
+  
+  --color-vip-gold: #D4AF37;
+  
+  /* Legacy compatibility */
+  --color-accent: #18181B;
+  --color-accent-hover: #3F3F46;
+  --color-accent-soft: #F4F4F5;
+  --color-bg-app: #FAFAFA;
+  --color-bg-card-dark: #1C1C1F;
   --color-pending: #636366;
   --color-pending-bg: #F2F2F7;
 }
 
+/* === DARK MODE === */
+.dark {
+  --color-bg-primary: #09090B;
+  --color-bg-secondary: #18181B;
+  --color-bg-card: #1C1C1F;
+  
+  --color-accent-primary: #FAFAFA;
+  --color-accent-secondary: #A1A1AA;
+  --color-accent-gold: #D4AF37;
+  
+  --color-text-primary: #FAFAFA;
+  --color-text-secondary: #A1A1AA;
+  --color-text-muted: #52525B;
+  
+  --color-border: #27272A;
+  
+  --color-success: #22C55E;
+  --color-success-bg: #14532D;
+  --color-danger: #EF4444;
+  --color-danger-bg: #7F1D1D;
+  --color-warning: #F59E0B;
+  --color-warning-bg: #78350F;
+  
+  --color-badge-bg: #FAFAFA;
+  --color-badge-text: #18181B;
+  
+  --color-vip-gold: #D4AF37;
+  
+  /* Legacy compatibility */
+  --color-accent: #FAFAFA;
+  --color-accent-hover: #A1A1AA;
+  --color-accent-soft: #27272A;
+  --color-bg-app: #09090B;
+  --color-bg-card-dark: #1C1C1F;
+  --color-pending: #A1A1AA;
+  --color-pending-bg: #27272A;
+}
+
+/* === BASE STYLES === */
 @layer base {
+  * {
+    transition: background-color 0.3s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+  
   body {
     @apply font-display antialiased;
-    background-color: #F5F5F7;
-    color: #1D1D1F;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+  }
+  
+  /* Custom scrollbar for dark mode */
+  .dark ::-webkit-scrollbar {
+    background-color: var(--color-bg-secondary);
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background-color: var(--color-border);
   }
 }
 
+/* === UTILITY CLASSES === */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* === GLASS MORPHISM EFFECTS === */
+.glass-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.dark .glass-card {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+/* === VIP GOLD ACCENT === */
+.vip-gold {
+  color: var(--color-vip-gold);
+}
+
+.vip-gold-bg {
+  background-color: var(--color-vip-gold);
+}
+
+/* === BADGE STYLES === */
+.badge-premium {
+  background-color: var(--color-badge-bg);
+  color: var(--color-badge-text);
+}
+
+.badge-gold {
+  background-color: var(--color-accent-gold);
+  color: #18181B;
+}
+
+/* === BUTTON STYLES === */
+.btn-primary {
+  background-color: var(--color-accent-primary);
+  color: var(--color-bg-primary);
+  border-radius: 12px;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-accent-secondary);
+}
+
+.dark .btn-primary {
+  background-color: var(--color-bg-primary);
+  color: var(--color-accent-primary);
+}
+
+.dark .btn-primary:hover {
+  background-color: var(--color-text-secondary);
+}
+
+/* === INPUT STYLES === */
+.input-field {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  border-radius: 16px;
+}
+
+.input-field:focus {
+  border-color: var(--color-accent-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(24,24,27,0.1);
+}
+
+.dark .input-field:focus {
+  box-shadow: 0 0 0 2px rgba(250,250,250,0.1);
+}
+
+.input-field::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* === CARD STYLES === */
+.card {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+}
+
+.dark .card {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+/* === SUCCESS/DANGER/WARNING BADGES === */
+.badge-success {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
+}
+
+.badge-danger {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+
+.badge-warning {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning);
+}
+
+/* === QUALITY TIER BADGES === */
+.badge-a-plus {
+  background: linear-gradient(135deg, var(--color-accent-gold), #C4A030);
+  color: #18181B;
+  font-weight: 700;
+}
+
+.badge-b-tier {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+/* === NAV ACTIVE STATE === */
+.nav-active-bg {
+  background-color: var(--color-bg-secondary);
+}
+
+.dark .nav-active-bg {
+  background-color: #27272A;
+}
+
+/* === CARBON CARD (Profile Stats) === */
+.carbon-card {
+  background-color: #1C1C1E;
+  color: white;
+}
+
+.dark .carbon-card {
+  background-color: #0F0F11;
+  border: 1px solid #27272A;
+}
+
+/* === HEADER GLASS === */
+.header-glass {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dark .header-glass {
+  background: rgba(9, 9, 11, 0.95);
+}
+
+/* === BOTTOM NAV GLASS === */
+.nav-glass {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
+}
+
+.dark .nav-glass {
+  background: rgba(24, 24, 27, 0.95);
 }

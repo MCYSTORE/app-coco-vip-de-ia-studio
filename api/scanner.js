@@ -2,6 +2,8 @@ const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
 const GOOGLE_SHEETS_URL = process.env.GOOGLE_SHEETS_URL;
 
+import { fetchFromCache, parseCacheEntry, getCacheMetadata } from './google-sheets.js';
+
 // Bookmakers for odds shopping
 const BOOKMAKERS = [
   'Bet365', 'Pinnacle', 'Bwin', '1xBet', 'William Hill',
@@ -28,23 +30,34 @@ function getBestOdd(allOdds) {
   return allOdds[0];
 }
 
-const SYSTEM_PROMPT = `Eres un escáner profesional de value bets.
-Recibes un array de partidos del día con sus cuotas y estadísticas disponibles.
-Tu tarea es evaluar TODOS los mercados de TODOS los partidos
-y devolver ÚNICAMENTE los que tienen edge positivo real (estimated_edge > 3%).
+const SYSTEM_PROMPT = `* **Role:** Actúa como un Senior Sports Betting Analyst y Escáner de Value Bets profesional.
 
-Para cada value bet detectada calcula:
-- estimated_edge: diferencia entre tu probabilidad estimada y la implícita
-- confidence: 1-10 basado en solidez estadística del pick
-- analysis_short: explicación en máximo 2 líneas de por qué hay valor
+* **Context:** Recibes un array de partidos del día con sus cuotas y estadísticas. Tu objetivo es evaluar TODOS los mercados de TODOS los partidos y devolver ÚNICAMENTE los que tienen edge positivo real (estimated_edge > 3%).
 
-REGLAS ANTI-ALUCINACIONES:
-- Si no tienes datos suficientes de un partido, ponle confidence <= 4
-- NUNCA inventes estadísticas ni resultados
-- Si no hay value genuino en ningún partido, devuelve array vacío
-- Distingue siempre entre datos observados y estimaciones
+* **Deportes y Mercados:**
+    - FÚTBOL: 1X2, Over/Under goles (0.5-3.5), BTTS, Handicaps, Córners, Tarjetas
+    - BALONCESTO: Moneyline, Over/Under puntos (205.5-230.5), Handicaps/Spread, Cuartos
+    - BÉISBOL: Moneyline, Run Line (-1.5/+1.5), Total Carreras Over/Under (6.5-9.5), 1er Inning
 
-Devuelve SOLO JSON válido:
+* **Task:** Escanea todos los partidos y devuelve las Value Bets con edge > 3%.
+
+* **Constraints/Formatting:**
+    1. El campo "selection" debe ser la APUESTA ESPECÍFICA, NO el nombre del mercado.
+    2. Ejemplos CORRECTOS de selection:
+       - Moneyline → "Lakers" (nombre del equipo)
+       - Over/Under 220.5 → "Over 220.5" o "Under 220.5"
+       - BTTS → "Ambos Anotan - Sí" o "Ambos Anotan - No"
+       - 1X2 → "Local", "Visitante" o "Empate"
+    3. ❌ NUNCA pongas "Ganador", "Moneyline", "Over/Under" como selection
+    4. ✅ SIEMPRE incluye equipo específico o dirección completa
+
+* **Steps:**
+    1. Evalúa cada partido según su deporte
+    2. Calcula la probabilidad real vs cuota implícita
+    3. Identifica edge positivo
+    4. Estructura la respuesta JSON ordenada por edge descendente
+
+* **Output JSON Format:**
 {
   "scan_date": "YYYY-MM-DD",
   "total_matches_analyzed": número,
@@ -53,10 +66,10 @@ Devuelve SOLO JSON válido:
     {
       "rank": 1,
       "match_name": "texto",
-      "sport": "texto",
+      "sport": "Football/Basketball/Baseball",
       "league": "texto",
-      "market": "texto",
-      "selection": "texto",
+      "market": "tipo de mercado",
+      "selection": "APUESTA ESPECÍFICA con equipo o dirección",
       "bookmaker": "texto",
       "odds": número,
       "implied_prob": número,
@@ -65,11 +78,80 @@ Devuelve SOLO JSON válido:
       "analysis_short": "texto máximo 2 líneas"
     }
   ]
-}
-Ordena results por estimated_edge descendente.`;
+}`;
 
-// Fetch matches from API-Sports
+// Fetch matches from Cache (primary) or API-Sports (fallback)
 async function fetchMatches(sport, date) {
+  // ========================================
+  // TRY CACHE FIRST
+  // ========================================
+  try {
+    const cachedData = await fetchFromCache({ date, sport });
+    
+    if (cachedData && cachedData.length > 0) {
+      console.log(`✅ Using cached data for ${sport} (${cachedData.length} entries)`);
+      
+      // Group by match_id to create match objects
+      const matchMap = new Map();
+      
+      for (const entry of cachedData) {
+        const matchId = entry.match_id;
+        
+        if (!matchMap.has(matchId)) {
+          matchMap.set(matchId, {
+            id: matchId,
+            homeTeam: entry.home_team,
+            awayTeam: entry.away_team,
+            league: entry.league,
+            date: entry.kickoff || entry.date,
+            status: 'NS',
+            isLive: false,
+            sport: sport.charAt(0).toUpperCase() + sport.slice(1),
+            odds: {},
+            fromCache: true
+          });
+        }
+        
+        const match = matchMap.get(matchId);
+        
+        // Add odds to the match
+        const market = entry.market_type;
+        if (!match.odds[market]) {
+          match.odds[market] = {};
+        }
+        
+        // Parse selection to get the key
+        const selection = entry.selection;
+        if (selection === entry.home_team || selection === 'Local') {
+          match.odds[market].home = entry.odds;
+        } else if (selection === entry.away_team || selection === 'Visitante') {
+          match.odds[market].away = entry.odds;
+        } else if (selection === 'Empate') {
+          match.odds[market].draw = entry.odds;
+        } else if (selection.startsWith('Over')) {
+          match.odds[market].over = entry.odds;
+        } else if (selection.startsWith('Under')) {
+          match.odds[market].under = entry.odds;
+        } else if (selection.includes('Sí')) {
+          match.odds[market].yes = entry.odds;
+        } else if (selection.includes('No')) {
+          match.odds[market].no = entry.odds;
+        } else {
+          match.odds[market][selection] = entry.odds;
+        }
+      }
+      
+      return Array.from(matchMap.values());
+    }
+  } catch (cacheError) {
+    console.log(`⚠️ Cache error for ${sport}:`, cacheError.message);
+  }
+
+  // ========================================
+  // FALLBACK TO API
+  // ========================================
+  console.log(`⚠️ No cache for ${sport}, falling back to API...`);
+  
   const baseUrls = {
     football: 'https://v3.football.api-sports.io',
     basketball: 'https://v3.basketball.api-sports.io',
@@ -354,10 +436,29 @@ export default async function handler(req, res) {
     
     // Add IDs to results
     if (scanResult.results) {
-      scanResult.results = scanResult.results.map((r, i) => ({
-        ...r,
-        id: `scan-${Date.now()}-${i}`
-      }));
+      const now = new Date().toISOString();
+      
+      scanResult.results = scanResult.results.map((r, i) => {
+        const baseOdds = r.odds || 1.85;
+        const allOdds = generateAllOdds(baseOdds);
+        const best = getBestOdd(allOdds);
+        
+        return {
+          ...r,
+          id: `scan-${Date.now()}-${i}`,
+          // Ensure odds shopping fields
+          all_odds: allOdds,
+          best_bookmaker: best?.bookmaker || r.bookmaker,
+          best_odd: best?.odds,
+          // Line Movement fields
+          opening_odd: baseOdds,
+          opening_odd_timestamp: now,
+          current_odd: baseOdds,
+          current_odd_timestamp: now,
+          line_movement_percent: 0,
+          line_movement_direction: 'stable'
+        };
+      });
       
       // Save to Google Sheets in background (don't wait for response)
       saveToGoogleSheets(scanResult.results).then(result => {
@@ -384,20 +485,21 @@ export default async function handler(req, res) {
 // Generate mock results for fallback
 function generateMockResults(matches, scanDate) {
   const results = [];
+  const now = new Date().toISOString();
   
   const markets = {
     Football: [
-      { market: 'Over 2.5 Goles', selection: 'Over' },
-      { market: 'BTTS', selection: 'Sí' },
+      { market: 'Over/Under 2.5', selection: 'Over 2.5' },
+      { market: 'BTTS', selection: 'Ambos Anotan - Sí' },
       { market: '1X2', selection: 'Local' }
     ],
     Basketball: [
-      { market: 'Over 220.5', selection: 'Over' },
+      { market: 'Over/Under 220.5', selection: 'Over 220.5' },
       { market: 'Moneyline', selection: 'Visitante' }
     ],
     Baseball: [
-      { market: 'Run Line -1.5', selection: 'Local' },
-      { market: 'Over 7.5 Carreras', selection: 'Over' }
+      { market: 'Run Line -1.5', selection: 'Run Line -1.5 Local' },
+      { market: 'Over/Under 7.5 Carreras', selection: 'Over 7.5' }
     ]
   };
 
@@ -424,7 +526,14 @@ function generateMockResults(matches, scanDate) {
       analysis_short: `Análisis automatizado detecta valor en este mercado basado en cuotas ofrecidas y estadísticas históricas.`,
       all_odds: allOdds,
       best_bookmaker: best?.bookmaker,
-      best_odd: best?.odds
+      best_odd: best?.odds,
+      // Line Movement fields
+      opening_odd: baseOdds,
+      opening_odd_timestamp: now,
+      current_odd: baseOdds,
+      current_odd_timestamp: now,
+      line_movement_percent: 0,
+      line_movement_direction: 'stable'
     });
   });
 
