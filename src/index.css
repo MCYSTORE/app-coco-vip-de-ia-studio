@@ -168,6 +168,22 @@
   background-color: var(--color-text-secondary);
 }
 
+/* === PILL FILTER STYLES === */
+.pill-active {
+  background-color: var(--color-accent-primary);
+  color: var(--color-bg-primary);
+}
+
+.pill-danger {
+  background-color: var(--color-danger);
+  color: white;
+}
+
+.pill-success {
+  background-color: var(--color-success);
+  color: white;
+}
+
 /* === INPUT STYLES === */
 .input-field {
   background-color: var(--color-bg-secondary);

@@ -224,11 +224,11 @@ export default function Scanner() {
             onClick={() => setActiveFilter(filter.id)}
             className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all flex items-center gap-2 ${
               activeFilter === filter.id 
-                ? 'text-white' 
+                ? 'btn-primary' 
                 : 'border'
             }`}
             style={activeFilter === filter.id 
-              ? { backgroundColor: 'var(--color-accent-primary)' }
+              ? {}
               : { backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-secondary)', borderColor: 'var(--color-border)' }
             }
           >
@@ -365,10 +365,7 @@ export default function Scanner() {
                 {/* Analyze Button */}
                 <button
                   onClick={() => handleAnalyzeMatch(result.match_name)}
-                  className="w-full py-3 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
-                  style={{ backgroundColor: 'var(--color-accent-primary)', boxShadow: '0 2px 8px rgba(94,92,230,0.3)' }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                  className="btn-primary w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
                 >
                   <Search className="w-4 h-4" />
                   Analizar en detalle

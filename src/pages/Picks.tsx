@@ -77,7 +77,7 @@ export default function Picks({ onOpenScanner }: PicksProps) {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={fetchPicks}
-            className="bg-[var(--color-accent-primary)] text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 shadow-lg shadow-[var(--color-accent-primary)]/25"
+            className="btn-primary px-6 py-3 rounded-xl font-semibold flex items-center gap-2"
           >
             <Zap className="w-5 h-5" />
             Analizar Mercados
@@ -114,7 +114,7 @@ export default function Picks({ onOpenScanner }: PicksProps) {
           onClick={() => setActiveFilter('all')}
           className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer ${
             activeFilter === 'all' 
-              ? 'bg-[var(--color-accent-primary)] text-white' 
+              ? 'pill-active' 
               : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
           }`}
         >
@@ -125,7 +125,7 @@ export default function Picks({ onOpenScanner }: PicksProps) {
           onClick={() => setActiveFilter('live')}
           className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
             activeFilter === 'live' 
-              ? 'bg-[var(--color-danger)] text-white' 
+              ? 'pill-danger' 
               : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
           }`}
         >
@@ -137,7 +137,7 @@ export default function Picks({ onOpenScanner }: PicksProps) {
           onClick={() => setActiveFilter('upcoming')}
           className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
             activeFilter === 'upcoming' 
-              ? 'bg-[var(--color-success)] text-white' 
+              ? 'pill-success' 
               : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
           }`}
         >

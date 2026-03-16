@@ -231,7 +231,7 @@ function DebateSection({ debate }: { debate: DebateResult }) {
         <button
           onClick={() => setActiveTab('conclusion')}
           className="flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-          style={activeTab === 'conclusion' ? { backgroundColor: 'var(--color-accent-primary)', color: 'white' } : { color: 'var(--color-text-secondary)' }}
+          style={activeTab === 'conclusion' ? { backgroundColor: 'var(--color-accent-primary)', color: 'var(--color-bg-primary)' } : { color: 'var(--color-text-secondary)' }}
         >
           <Scale className="w-3.5 h-3.5" />
           Conclusión
@@ -556,8 +556,7 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
         <button
           onClick={handleAnalyze}
           disabled={loading || !formData.match_name}
-          className="w-full py-4 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ backgroundColor: 'var(--color-accent-primary)', color: 'white', boxShadow: '0 2px 8px rgba(24,24,27,0.3)' }}
+          className="w-full py-4 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed btn-primary"
         >
           {loading ? (
             <motion.div 
@@ -599,7 +598,7 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
                   <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--color-accent-primary)' }}>Mejor Value Bet</p>
                   
                   {/* SELECCIÓN DESTACADA */}
-                  <div className="px-4 py-3 rounded-xl inline-block mb-3" style={{ background: 'linear-gradient(to right, var(--color-accent-primary), var(--color-accent-secondary))', color: 'white' }}>
+                  <div className="px-4 py-3 rounded-xl inline-block mb-3" style={{ background: 'linear-gradient(to right, var(--color-accent-primary), var(--color-accent-secondary))', color: 'var(--color-bg-primary)' }}>
                     <span className="text-2xl font-bold">{result.selection}</span>
                   </div>
                   

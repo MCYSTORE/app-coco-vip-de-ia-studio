@@ -340,8 +340,7 @@ export default function PickCard({ pick, onDetail, onUpdate }: PickCardProps) {
             </button>
             <button
               onClick={() => setShowModal(true)}
-              className="flex-1 flex items-center justify-center rounded-xl py-3 text-sm font-bold text-white transition-all active:scale-95"
-              style={{ backgroundColor: 'var(--color-accent-primary)', boxShadow: '0 2px 8px rgba(94,92,230,0.3)' }}
+              className="btn-primary flex-1 flex items-center justify-center rounded-xl py-3 text-sm font-bold transition-all active:scale-95"
             >
               <BookOpen className="w-4 h-4 mr-2" />
               Ver Análisis
