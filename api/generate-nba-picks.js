@@ -91,6 +91,8 @@ function logDiscardedPick(match, reason, extra = {}) {
 }
 
 async function fetchFromAPI(endpoint) {
+  console.log(`   🔗 Fetching: https://v3.basketball.api-sports.io/${endpoint}`);
+  
   const response = await fetch(`https://v3.basketball.api-sports.io/${endpoint}`, {
     headers: {
       'x-apisports-key': SPORTS_API_KEY || ''
@@ -98,11 +100,24 @@ async function fetchFromAPI(endpoint) {
   });
 
   if (!response.ok) {
-    throw new Error(`API-Sports error: ${response.status}`);
+    const errorText = await response.text().catch(() => 'Unknown error');
+    console.error(`   ❌ API-Sports Basketball error: ${response.status} - ${errorText}`);
+    
+    // Check for common issues
+    if (response.status === 403) {
+      throw new Error(`API access denied (403). The Basketball API may require a separate subscription. Your API key may only have access to Football.`);
+    }
+    if (response.status === 429) {
+      throw new Error(`API rate limit exceeded (429). Too many requests today.`);
+    }
+    
+    throw new Error(`API-Sports Basketball error: ${response.status}`);
   }
 
   requestCountToday++;
-  return response.json();
+  const data = await response.json();
+  console.log(`   ✅ API Response: ${data.response?.length || 0} items`);
+  return data;
 }
 
 async function saveDiscardedPicksToSupabase(discarded) {
@@ -830,6 +845,11 @@ export default async function handler(req, res) {
     console.log(`   Found ${games.length} NBA games`);
     
     if (games.length === 0) {
+      // Check if API key might not have basketball access
+      const apiMessage = requestCountToday === 0 
+        ? "No se pudo conectar con la API de Basketball. Tu suscripción de API-Sports puede no incluir Basketball (solo Football). Verifica tu plan en api-sports.io"
+        : "No hay partidos de NBA programados para hoy";
+      
       return res.status(200).json({
         date: targetDate,
         picks_generated: 0,
@@ -837,7 +857,7 @@ export default async function handler(req, res) {
         discarded_count: 0,
         api_requests_used: requestCountToday,
         execution_time_ms: Date.now() - startTime,
-        message: "No NBA games scheduled for today"
+        message: apiMessage
       });
     }
     
