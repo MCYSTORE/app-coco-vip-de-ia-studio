@@ -122,37 +122,7 @@ export default function Picks({ onOpenScanner }: PicksProps) {
     );
   }
 
-  // Show initial state with button to load picks
-  if (!hasLoaded && !loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">Top Picks</h2>
-            <p className="text-sm text-[var(--color-text-secondary)] flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" />
-              Mejores oportunidades detectadas
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-col items-center justify-center py-16">
-          <div className="bg-[var(--color-bg-secondary)] w-20 h-20 rounded-full flex items-center justify-center mb-4">
-            <TrendingUp className="w-10 h-10 text-[var(--color-accent-primary)]" />
-          </div>
-          <p className="text-[var(--color-text-primary)] font-semibold text-lg">Obtener Top Picks</p>
-          <p className="text-[var(--color-text-secondary)] text-sm mt-1 mb-6">Pulsa el botón para analizar los mercados</p>
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={fetchPicks}
-            className="btn-primary px-6 py-3 rounded-xl font-semibold flex items-center gap-2"
-          >
-            <Zap className="w-5 h-5" />
-            Analizar Mercados
-          </motion.button>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="space-y-6">
@@ -382,12 +352,27 @@ export default function Picks({ onOpenScanner }: PicksProps) {
           {filteredPicks.length === 0 ? (
             <div className="text-center py-12">
               <div className="bg-[var(--color-bg-secondary)] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="text-[var(--color-accent-primary)] w-8 h-8" />
+                {!hasLoaded ? (
+                  <Sparkles className="text-[var(--color-accent-primary)] w-8 h-8" />
+                ) : (
+                  <Shield className="text-[var(--color-accent-primary)] w-8 h-8" />
+                )}
               </div>
-              <p className="text-[var(--color-text-primary)] font-semibold">Sin picks de calidad hoy</p>
-              <p className="text-[var(--color-text-secondary)] text-sm mt-2 max-w-xs mx-auto">
-                El sistema es estricto para proteger tu bankroll. Vuelve mañana para nuevas oportunidades.
-              </p>
+              {!hasLoaded ? (
+                <>
+                  <p className="text-[var(--color-text-primary)] font-semibold">Selecciona un deporte para analizar</p>
+                  <p className="text-[var(--color-text-secondary)] text-sm mt-2 max-w-xs mx-auto">
+                    Pulsa uno de los botones de arriba para generar picks automáticamente con IA.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[var(--color-text-primary)] font-semibold">Sin picks de calidad hoy</p>
+                  <p className="text-[var(--color-text-secondary)] text-sm mt-2 max-w-xs mx-auto">
+                    El sistema es estricto para proteger tu bankroll. Vuelve mañana para nuevas oportunidades.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             filteredPicks.map((pick, index) => (

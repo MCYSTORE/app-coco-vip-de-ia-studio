@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Prediction, calculateExtraEdge, calculateLineMovement, calculateKellyStake, deriveWinProbabilityFromEdge, getBankroll } from '../types';
-import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check, ShoppingBag, ArrowUpRight, RefreshCw, ArrowUp, ArrowDown, Minus, Calculator, AlertTriangle, Info, Wallet, Percent, Shield, Bot, User } from 'lucide-react';
+import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check, ShoppingBag, ArrowUpRight, RefreshCw, ArrowUp, ArrowDown, Minus, Calculator, AlertTriangle, Info, Wallet, Percent, Shield, Bot, User, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const STORAGE_KEY = 'coco_vip_predictions';
@@ -161,6 +161,14 @@ export default function PickCard({ pick, onDetail, onUpdate }: PickCardProps) {
             <span>{currentPick.sport}</span>
           </div>
 
+          {/* Player Prop Badge */}
+          {currentPick.pickType === 'player_prop' && (
+            <div className="absolute top-14 left-3 px-2 py-1 rounded-full text-white text-[10px] font-bold flex items-center gap-1 shadow-lg bg-gradient-to-r from-orange-500 to-amber-500">
+              <Users className="w-3 h-3" />
+              PLAYER PROP
+            </div>
+          )}
+
           {/* Source Badge (Auto/Manual) */}
           {currentPick.source && (
             <div 
@@ -219,6 +227,29 @@ export default function PickCard({ pick, onDetail, onUpdate }: PickCardProps) {
           </div>
 
           <div className="mb-4 space-y-2">
+            {/* Player Prop Special Display */}
+            {currentPick.pickType === 'player_prop' && currentPick.playerName && (
+              <div className="rounded-xl p-3 border border-orange-500/30" style={{ backgroundColor: 'rgba(249, 115, 22, 0.1)' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-[var(--color-text-primary)]">{currentPick.playerName}</p>
+                    {currentPick.playerTeam && (
+                      <p className="text-[10px] text-[var(--color-text-secondary)]">{currentPick.playerTeam}</p>
+                    )}
+                  </div>
+                </div>
+                {currentPick.line && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-[var(--color-text-secondary)]">Línea:</span>
+                    <span className="font-bold text-orange-500">{currentPick.line}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            
             <div className="flex items-center gap-2 text-[var(--color-text-secondary)] text-sm">
               <Target className="w-4 h-4 text-[var(--color-accent-primary)]" />
               <span><strong className="text-[var(--color-text-primary)]">{currentPick.selection}</strong></span>

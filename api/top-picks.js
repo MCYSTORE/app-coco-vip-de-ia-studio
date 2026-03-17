@@ -1,5 +1,7 @@
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
 const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 import { fetchFromCache, getCacheMetadata } from './google-sheets.js';
 
@@ -26,6 +28,71 @@ function generateAllOdds(baseOdds, numBookmakers = 5) {
 function getBestOdd(allOdds) {
   if (!allOdds || allOdds.length === 0) return null;
   return allOdds[0];
+}
+
+// Fetch picks from Supabase (including player props)
+async function fetchPicksFromSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.log("⚠️ Supabase not configured");
+    return [];
+  }
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Fetch picks for today, ordered by confidence
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/predictions?select=*&date=eq.${today}&status=eq.pending&order=confidence.desc&limit=10`,
+      {
+        headers: {
+          'apikey': SUPABASE_SERVICE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      console.log(`Supabase error: ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
+    
+    if (data && data.length > 0) {
+      console.log(`✅ Found ${data.length} picks in Supabase for today`);
+      
+      // Map Supabase data to Prediction format
+      return data.map((pick, index) => ({
+        id: pick.id || `supabase-${index}`,
+        matchName: pick.match_name || `${pick.home_team} vs ${pick.away_team}`,
+        sport: pick.sport || 'Football',
+        bestMarket: pick.market || '1X2',
+        selection: pick.selection || '',
+        bookmaker: pick.bookmaker || 'Bet365',
+        odds: pick.odds || 1.85,
+        edgePercent: pick.edge_percent || 5,
+        confidence: pick.confidence || 7,
+        analysisText: pick.analysis_text || 'Análisis generado automáticamente',
+        status: pick.status || 'pending',
+        createdAt: pick.created_at || new Date().toISOString(),
+        league: pick.league || '',
+        isLive: false,
+        source: pick.source || 'daily_auto',
+        qualityTier: pick.quality_tier || 'B',
+        riskFactors: pick.risk_factors || [],
+        // Player Props fields
+        pickType: pick.pick_type || 'team',
+        playerName: pick.player_name || null,
+        playerTeam: pick.player_name ? (pick.home_team || pick.away_team) : null,
+        line: pick.line || null
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error("Error fetching from Supabase:", error.message);
+    return [];
+  }
 }
 
 async function fetchFromAPI(endpoint, sport) {
