@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PickCard from '../components/PickCard';
 import { Prediction } from '../types';
-import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp, Radar, ChevronRight } from 'lucide-react';
+import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp, Radar, ChevronRight, Sparkles, Bot, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PicksProps {
@@ -11,9 +11,11 @@ interface PicksProps {
 export default function Picks({ onOpenScanner }: PicksProps) {
   const [picks, setPicks] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'live' | 'upcoming'>('all');
+  const [generating, setGenerating] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'live' | 'upcoming' | 'auto'>('all');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [generateResult, setGenerateResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const fetchPicks = async () => {
     setLoading(true);
@@ -30,15 +32,53 @@ export default function Picks({ onOpenScanner }: PicksProps) {
     }
   };
 
+  const generateDailyPicks = async () => {
+    setGenerating(true);
+    setGenerateResult(null);
+    
+    try {
+      const response = await fetch('/api/generate-daily-picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setGenerateResult({
+          success: true,
+          message: `¡${data.picks_generated} picks generados exitosamente!`
+        });
+        // Refresh picks after generation
+        await fetchPicks();
+      } else {
+        setGenerateResult({
+          success: false,
+          message: data.message || 'Error al generar picks'
+        });
+      }
+    } catch (error: any) {
+      setGenerateResult({
+        success: false,
+        message: error.message || 'Error de conexión'
+      });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // No auto-fetch - user must click button to load picks
 
   const filteredPicks = picks.filter(pick => {
     if (activeFilter === 'live') return pick.isLive;
     if (activeFilter === 'upcoming') return !pick.isLive;
+    if (activeFilter === 'auto') return pick.source === 'daily_auto';
     return true;
   });
 
   const liveCount = picks.filter(p => p.isLive).length;
+  const autoCount = picks.filter(p => p.source === 'daily_auto').length;
 
   if (loading && picks.length === 0) {
     return (
@@ -98,14 +138,57 @@ export default function Picks({ onOpenScanner }: PicksProps) {
             Mejores oportunidades detectadas
           </p>
         </div>
-        <button
-          onClick={fetchPicks}
-          disabled={loading}
-          className="p-2 text-[var(--color-accent-primary)] hover:bg-[var(--color-bg-secondary)] rounded-full transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchPicks}
+            disabled={loading}
+            className="p-2 text-[var(--color-accent-primary)] hover:bg-[var(--color-bg-secondary)] rounded-full transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
+
+      {/* Generate Daily Picks Button */}
+      <motion.button
+        whileTap={{ scale: 0.98 }}
+        onClick={generateDailyPicks}
+        disabled={generating}
+        className="w-full bg-gradient-to-r from-[var(--color-accent-primary)] to-[var(--color-accent-secondary)] text-white p-4 rounded-2xl flex items-center justify-between shadow-lg disabled:opacity-50"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+            {generating ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Sparkles className="w-5 h-5" />
+            )}
+          </div>
+          <div className="text-left">
+            <p className="font-bold">{generating ? 'Generando picks...' : 'Generar Picks de Hoy'}</p>
+            <p className="text-xs text-white/70">5 picks automáticos con DeepSeek AI</p>
+          </div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-white/60" />
+      </motion.button>
+
+      {/* Generate Result Message */}
+      <AnimatePresence>
+        {generateResult && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className={`p-3 rounded-xl text-sm ${
+              generateResult.success 
+                ? 'bg-green-500/10 text-green-500 border border-green-500/20' 
+                : 'bg-red-500/10 text-red-500 border border-red-500/20'
+            }`}
+          >
+            {generateResult.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Stats Bar */}
       <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
@@ -143,6 +226,18 @@ export default function Picks({ onOpenScanner }: PicksProps) {
         >
           <Clock className="w-3 h-3" />
           Próximos
+        </motion.div>
+        <motion.div 
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setActiveFilter('auto')}
+          className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
+            activeFilter === 'auto' 
+              ? 'bg-purple-500 text-white' 
+              : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+          }`}
+        >
+          <Bot className="w-3 h-3" />
+          Auto ({autoCount})
         </motion.div>
       </div>
 

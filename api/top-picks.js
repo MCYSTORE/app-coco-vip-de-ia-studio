@@ -387,7 +387,9 @@ function getFallbackPicks() {
       currentOdd: 1.95,
       currentOddTimestamp: now,
       lineMovementPercent: 0,
-      lineMovementDirection: 'stable'
+      lineMovementDirection: 'stable',
+      source: 'manual',
+      qualityTier: 'A_PLUS'
     },
     {
       id: "demo-2",
@@ -409,7 +411,9 @@ function getFallbackPicks() {
       currentOdd: 1.88,
       currentOddTimestamp: now,
       lineMovementPercent: 0,
-      lineMovementDirection: 'stable'
+      lineMovementDirection: 'stable',
+      source: 'manual',
+      qualityTier: 'B'
     },
     {
       id: "demo-3",
@@ -431,7 +435,9 @@ function getFallbackPicks() {
       currentOdd: 1.75,
       currentOddTimestamp: now,
       lineMovementPercent: 0,
-      lineMovementDirection: 'stable'
+      lineMovementDirection: 'stable',
+      source: 'manual',
+      qualityTier: 'A_PLUS'
     }
   ];
 }
@@ -486,7 +492,9 @@ export default async function handler(req, res) {
           currentOdd: baseOdds,
           currentOddTimestamp: now,
           lineMovementPercent: 0,
-          lineMovementDirection: 'stable'
+          lineMovementDirection: 'stable',
+          source: 'scanner',
+          qualityTier: pick.edgePercent >= 10 ? 'A_PLUS' : 'B'
         };
       });
       
@@ -541,7 +549,9 @@ export default async function handler(req, res) {
           currentOdd: +baseOdds.toFixed(2),
           currentOddTimestamp: now,
           lineMovementPercent: 0,
-          lineMovementDirection: 'stable'
+          lineMovementDirection: 'stable',
+          source: 'scanner',
+          qualityTier: 'B'
         });
       }
     }

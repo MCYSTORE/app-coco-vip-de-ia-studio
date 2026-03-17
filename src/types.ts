@@ -76,6 +76,10 @@ export interface Prediction {
   league?: string;
   isLive?: boolean;
   hasRealStats?: boolean;
+  // Source tracking
+  source?: 'manual' | 'daily_auto' | 'scanner';
+  qualityTier?: 'A_PLUS' | 'B' | 'REJECTED';
+  riskFactors?: string[];
   // Odds Shopping
   allOdds?: OddOption[];
   bestBookmaker?: string;

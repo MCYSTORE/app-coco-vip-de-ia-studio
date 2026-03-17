@@ -1128,6 +1128,27 @@ IMPORTANTE:
   });
 
   // =====================================================
+  // Daily Picks Auto-Generation Endpoint
+  // =====================================================
+
+  app.post("/api/generate-daily-picks", async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+      // Dynamic import for the handler
+      const { default: generateDailyPicks } = await import('./api/generate-daily-picks.js');
+      return generateDailyPicks(req, res);
+    } catch (error: any) {
+      console.error("Daily Picks Error:", error);
+      return res.status(500).json({
+        error: "Failed to generate daily picks",
+        message: error.message,
+        execution_time_ms: Date.now() - startTime
+      });
+    }
+  });
+
+  // =====================================================
   // Vite middleware for development
   // =====================================================
 

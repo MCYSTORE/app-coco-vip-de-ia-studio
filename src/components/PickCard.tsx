@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Prediction, calculateExtraEdge, calculateLineMovement, calculateKellyStake, deriveWinProbabilityFromEdge, getBankroll } from '../types';
-import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check, ShoppingBag, ArrowUpRight, RefreshCw, ArrowUp, ArrowDown, Minus, Calculator, AlertTriangle, Info, Wallet, Percent, Shield } from 'lucide-react';
+import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check, ShoppingBag, ArrowUpRight, RefreshCw, ArrowUp, ArrowDown, Minus, Calculator, AlertTriangle, Info, Wallet, Percent, Shield, Bot, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const STORAGE_KEY = 'coco_vip_predictions';
@@ -161,9 +161,29 @@ export default function PickCard({ pick, onDetail, onUpdate }: PickCardProps) {
             <span>{currentPick.sport}</span>
           </div>
 
+          {/* Source Badge (Auto/Manual) */}
+          {currentPick.source && (
+            <div 
+              className={`absolute top-3 ${currentPick.isLive ? 'right-24' : 'right-14'} px-2 py-1 rounded-full text-white text-[10px] font-bold flex items-center gap-1 shadow-lg`}
+              style={{ backgroundColor: currentPick.source === 'daily_auto' ? '#8B5CF6' : 'var(--color-text-secondary)' }}
+            >
+              {currentPick.source === 'daily_auto' ? (
+                <>
+                  <Bot className="w-3 h-3" />
+                  AUTO
+                </>
+              ) : (
+                <>
+                  <User className="w-3 h-3" />
+                  MANUAL
+                </>
+              )}
+            </div>
+          )}
+
           {/* Live Badge */}
           {currentPick.isLive && (
-            <div className="absolute top-3 right-14 px-2 py-1 rounded-full bg-[var(--color-danger)] text-white text-[10px] font-bold flex items-center gap-1 animate-pulse">
+            <div className={`absolute top-3 ${currentPick.source ? 'right-36' : 'right-14'} px-2 py-1 rounded-full bg-[var(--color-danger)] text-white text-[10px] font-bold flex items-center gap-1 animate-pulse`}>
               <Zap className="w-3 h-3" />
               LIVE
             </div>
@@ -381,6 +401,18 @@ export default function PickCard({ pick, onDetail, onUpdate }: PickCardProps) {
                     <span className="text-sm font-medium opacity-90">{currentPick.sport}</span>
                     {currentPick.isLive && (
                       <span className="ml-2 px-2 py-0.5 bg-[var(--color-danger)] rounded text-xs font-bold animate-pulse">LIVE</span>
+                    )}
+                    {currentPick.source === 'daily_auto' && (
+                      <span className="ml-1 px-2 py-0.5 bg-purple-500 rounded text-xs font-bold flex items-center gap-1">
+                        <Bot className="w-3 h-3" />
+                        AUTO
+                      </span>
+                    )}
+                    {currentPick.source === 'manual' && (
+                      <span className="ml-1 px-2 py-0.5 bg-white/20 rounded text-xs font-bold flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        MANUAL
+                      </span>
                     )}
                   </div>
                   
