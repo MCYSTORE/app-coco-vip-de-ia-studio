@@ -277,6 +277,7 @@ function getDemoNBAGames(date) {
  */
 async function fetchFromBalldontlieAPI(endpoint) {
   if (!BALLDONTLIE_API_KEY) {
+    console.log("   ⚠️ No BALLDONTLIE_API_KEY configured");
     return null;
   }
   
@@ -289,7 +290,9 @@ async function fetchFromBalldontlieAPI(endpoint) {
     });
 
     if (!response.ok) {
-      throw new Error(`Balldontlie API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Balldontlie API error: ${response.status} - ${errorText}`);
+      return null;
     }
 
     requestCountToday++;
@@ -312,34 +315,39 @@ async function getNBAGames(date) {
   // Try API first if key is available
   if (BALLDONTLIE_API_KEY) {
     try {
+      // Get games for the season and filter by date
       const data = await fetchFromBalldontlieAPI(`/games?seasons[]=${season}&per_page=100`);
       
       if (data && data.data) {
         console.log(`   📊 API Response: ${data.data.length} total games this season`);
         
+        // Filter games for target date and not started
         const todayGames = data.data.filter(game => {
           const gameDate = new Date(game.date).toISOString().split('T')[0];
-          return gameDate === formattedDate && game.status === 'Scheduled';
+          return gameDate === formattedDate && 
+                 (game.status === 'Scheduled' || game.time);
         });
         
         console.log(`   📊 Games scheduled for ${formattedDate}: ${todayGames.length}`);
         
-        return todayGames.map(game => ({
-          game_id: game.id,
-          league: { id: 12, name: "NBA", country: "USA", tier: 1 },
-          home: {
-            id: game.home_team.id,
-            name: game.home_team.full_name || game.home_team.name,
-            abbreviation: game.home_team.abbreviation
-          },
-          away: {
-            id: game.visitor_team.id,
-            name: game.visitor_team.full_name || game.visitor_team.name,
-            abbreviation: game.visitor_team.abbreviation
-          },
-          tipoff_utc: game.date,
-          status: 'NS'
-        }));
+        if (todayGames.length > 0) {
+          return todayGames.map(game => ({
+            game_id: game.id,
+            league: { id: 12, name: "NBA", country: "USA", tier: 1 },
+            home: {
+              id: game.home_team.id,
+              name: game.home_team.full_name || game.home_team.name,
+              abbreviation: game.home_team.abbreviation
+            },
+            away: {
+              id: game.visitor_team.id,
+              name: game.visitor_team.full_name || game.visitor_team.name,
+              abbreviation: game.visitor_team.abbreviation
+            },
+            tipoff_utc: game.date,
+            status: game.status
+          }));
+        }
       }
     } catch (error) {
       console.error(`Error fetching NBA games:`, error.message);
@@ -347,6 +355,7 @@ async function getNBAGames(date) {
   }
   
   // Fallback to demo data
+  console.log(`   📊 Falling back to demo data`);
   return getDemoNBAGames(formattedDate);
 }
 
