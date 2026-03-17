@@ -129,14 +129,39 @@ async function saveDiscardedPicksToSupabase(discarded) {
 // =====================================================
 
 /**
+ * Get NBA season year from date
+ * NBA season starts in October and ends in June of next year
+ * So for Jan-June 2025, season = 2024 (2024-25 season)
+ * For Oct-Dec 2024, season = 2024 (2024-25 season)
+ */
+function getNBASeasonYear(dateStr) {
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // 1-12
+  
+  // If month is January through September (1-9), we're in the previous year's season
+  // NBA 2024-25 season: Oct 2024 - June 2025
+  if (month >= 1 && month <= 9) {
+    return year - 1;
+  }
+  // October through December: current year is the season start
+  return year;
+}
+
+/**
  * Get NBA games for a specific date
  */
 async function getNBAGames(date) {
   const games = [];
+  const season = getNBASeasonYear(date);
+  
+  console.log(`   📅 Fetching NBA games for ${date} (season ${season})`);
   
   for (const league of CONFIG.LEAGUES) {
     try {
-      const data = await fetchFromAPI(`games?date=${date}&league=${league.id}&season=${new Date(date).getFullYear()}`);
+      const data = await fetchFromAPI(`games?date=${date}&league=${league.id}&season=${season}`);
+      
+      console.log(`   📊 API Response for ${league.name}: ${data.response?.length || 0} games`);
       
       if (data.response) {
         for (const game of data.response) {
@@ -792,9 +817,10 @@ export default async function handler(req, res) {
   try {
     const { date } = req.body || {};
     const targetDate = date || new Date().toISOString().split('T')[0];
-    const season = new Date(targetDate).getFullYear();
+    const season = getNBASeasonYear(targetDate); // Use correct NBA season year
     
     console.log(`\n🏀 Starting NBA Picks Generation for ${targetDate}`);
+    console.log(`   Season: ${season}-${season + 1} NBA Season`);
     
     checkAndResetCounter();
     
