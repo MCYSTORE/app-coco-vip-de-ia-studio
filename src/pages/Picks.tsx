@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PickCard from '../components/PickCard';
 import { Prediction } from '../types';
-import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp, Radar, ChevronRight, Sparkles, Bot, User } from 'lucide-react';
+import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp, Radar, ChevronRight, Sparkles, Bot, User, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PicksProps {
@@ -46,10 +46,23 @@ export default function Picks({ onOpenScanner }: PicksProps) {
       const data = await response.json();
       
       if (response.ok) {
-        setGenerateResult({
-          success: true,
-          message: `¡${data.picks_generated} picks generados exitosamente!`
-        });
+        // Handle the "no quality picks" message
+        if (data.message && data.picks_generated === 0) {
+          setGenerateResult({
+            success: false,
+            message: data.message
+          });
+        } else if (data.picks_generated > 0) {
+          setGenerateResult({
+            success: true,
+            message: `¡${data.picks_generated} pick${data.picks_generated > 1 ? 's' : ''} de calidad generados!`
+          });
+        } else {
+          setGenerateResult({
+            success: false,
+            message: data.message || 'No se encontraron picks de calidad'
+          });
+        }
         // Refresh picks after generation
         await fetchPicks();
       } else {
@@ -166,7 +179,7 @@ export default function Picks({ onOpenScanner }: PicksProps) {
           </div>
           <div className="text-left">
             <p className="font-bold">{generating ? 'Generando picks...' : 'Generar Picks de Hoy'}</p>
-            <p className="text-xs text-white/70">5 picks automáticos con DeepSeek AI</p>
+            <p className="text-xs text-white/70">Hasta 3 picks de alta calidad con DeepSeek AI</p>
           </div>
         </div>
         <ChevronRight className="w-5 h-5 text-white/60" />
@@ -282,10 +295,12 @@ export default function Picks({ onOpenScanner }: PicksProps) {
           {filteredPicks.length === 0 ? (
             <div className="text-center py-12">
               <div className="bg-[var(--color-bg-secondary)] w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Filter className="text-[var(--color-text-muted)] w-8 h-8" />
+                <Shield className="text-[var(--color-accent-primary)] w-8 h-8" />
               </div>
-              <p className="text-[var(--color-text-secondary)]">No hay picks disponibles en esta categoría</p>
-              <p className="text-[var(--color-text-muted)] text-sm mt-1">Intenta con otro filtro o recarga</p>
+              <p className="text-[var(--color-text-primary)] font-semibold">Sin picks de calidad hoy</p>
+              <p className="text-[var(--color-text-secondary)] text-sm mt-2 max-w-xs mx-auto">
+                El sistema es estricto para proteger tu bankroll. Vuelve mañana para nuevas oportunidades.
+              </p>
             </div>
           ) : (
             filteredPicks.map((pick, index) => (

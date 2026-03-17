@@ -159,6 +159,47 @@ CREATE TABLE IF NOT EXISTS daily_picks_history (
 CREATE INDEX IF NOT EXISTS idx_daily_picks_date ON daily_picks_history(date);
 
 -- =====================================================
+-- Discarded Picks Log Table (FIX 5: Transparency)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS picks_discarded (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  date DATE NOT NULL,
+  match_name TEXT NOT NULL,
+  league TEXT,
+  league_id INT,
+  reason TEXT NOT NULL CHECK (reason IN (
+    'liga_no_permitida',
+    'partido_femenino',
+    'datos_insuficientes',
+    'confianza_baja',
+    'ev_insuficiente',
+    'sin_value_bet'
+  )),
+  confidence_llm DECIMAL,
+  ev_llm DECIMAL,
+  data_blocks_available INT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for discarded picks analysis
+CREATE INDEX IF NOT EXISTS idx_discarded_date ON picks_discarded(date);
+CREATE INDEX IF NOT EXISTS idx_discarded_reason ON picks_discarded(reason);
+CREATE INDEX IF NOT EXISTS idx_discarded_league ON picks_discarded(league_id);
+
+-- View for discard analysis
+CREATE OR REPLACE VIEW discard_analysis AS
+SELECT 
+  reason,
+  COUNT(*) as total_discarded,
+  COUNT(*) FILTER (WHERE date = CURRENT_DATE) as discarded_today,
+  ROUND(AVG(confidence_llm), 2) as avg_confidence,
+  ROUND(AVG(ev_llm), 3) as avg_ev
+FROM picks_discarded
+GROUP BY reason
+ORDER BY total_discarded DESC;
+
+-- =====================================================
 -- Useful Views
 -- =====================================================
 
