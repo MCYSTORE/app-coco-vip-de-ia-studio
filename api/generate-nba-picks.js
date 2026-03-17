@@ -231,6 +231,132 @@ const DEMO_TEAMS = {
       { name: 'Giannis Antetokounmpo', position: 'PF', season_avg: { points: 30.8, rebounds: 11.8, assists: 6.2, minutes: 35.5, games_played: 60 } },
       { name: 'Damian Lillard', position: 'PG', season_avg: { points: 24.5, rebounds: 4.2, assists: 7.0, minutes: 35.0, games_played: 58 } }
     ]
+  },
+  'SAS': {
+    id: 24,
+    name: 'San Antonio Spurs',
+    abbreviation: 'SAS',
+    conference: 'West',
+    stats: {
+      avg_points_for: 111.2,
+      avg_points_against: 118.5,
+      record: '28-38',
+      conference_rank: 12,
+      form: ['L','L','W','L','W'],
+      last10_avg_total: 229.7
+    },
+    players: [
+      { name: 'Victor Wembanyama', position: 'C', season_avg: { points: 24.3, rebounds: 11.0, assists: 3.7, minutes: 33.5, games_played: 55 } },
+      { name: 'DeAaron Fox', position: 'PG', season_avg: { points: 23.5, rebounds: 4.2, assists: 6.1, minutes: 35.0, games_played: 50 } }
+    ]
+  },
+  'NYK': {
+    id: 22,
+    name: 'New York Knicks',
+    abbreviation: 'NYK',
+    conference: 'East',
+    stats: {
+      avg_points_for: 116.8,
+      avg_points_against: 112.1,
+      record: '42-23',
+      conference_rank: 3,
+      form: ['W','W','L','W','W'],
+      last10_avg_total: 228.9
+    },
+    players: [
+      { name: 'Jalen Brunson', position: 'PG', season_avg: { points: 26.3, rebounds: 3.0, assists: 7.4, minutes: 35.2, games_played: 62 } },
+      { name: 'Karl-Anthony Towns', position: 'C', season_avg: { points: 24.8, rebounds: 12.8, assists: 3.2, minutes: 34.0, games_played: 60 } }
+    ]
+  },
+  'CLE': {
+    id: 27,
+    name: 'Cleveland Cavaliers',
+    abbreviation: 'CLE',
+    conference: 'East',
+    stats: {
+      avg_points_for: 122.5,
+      avg_points_against: 109.8,
+      record: '52-12',
+      conference_rank: 1,
+      form: ['W','W','W','W','W'],
+      last10_avg_total: 232.3
+    },
+    players: [
+      { name: 'Donovan Mitchell', position: 'SG', season_avg: { points: 24.2, rebounds: 4.5, assists: 5.0, minutes: 33.0, games_played: 58 } },
+      { name: 'Darius Garland', position: 'PG', season_avg: { points: 21.1, rebounds: 2.6, assists: 6.8, minutes: 31.5, games_played: 60 } }
+    ]
+  },
+  'GSW': {
+    id: 9,
+    name: 'Golden State Warriors',
+    abbreviation: 'GSW',
+    conference: 'West',
+    stats: {
+      avg_points_for: 113.5,
+      avg_points_against: 111.8,
+      record: '35-30',
+      conference_rank: 8,
+      form: ['W','L','W','L','W'],
+      last10_avg_total: 225.3
+    },
+    players: [
+      { name: 'Stephen Curry', position: 'PG', season_avg: { points: 26.8, rebounds: 4.4, assists: 5.0, minutes: 32.5, games_played: 58 } },
+      { name: 'Jimmy Butler', position: 'SF', season_avg: { points: 17.5, rebounds: 5.2, assists: 5.5, minutes: 32.0, games_played: 15 } }
+    ]
+  },
+  'MIN': {
+    id: 18,
+    name: 'Minnesota Timberwolves',
+    abbreviation: 'MIN',
+    conference: 'West',
+    stats: {
+      avg_points_for: 112.8,
+      avg_points_against: 109.5,
+      record: '38-29',
+      conference_rank: 7,
+      form: ['W','W','L','L','W'],
+      last10_avg_total: 222.3
+    },
+    players: [
+      { name: 'Anthony Edwards', position: 'SG', season_avg: { points: 27.5, rebounds: 6.0, assists: 4.5, minutes: 36.0, games_played: 62 } },
+      { name: 'Julius Randle', position: 'PF', season_avg: { points: 18.8, rebounds: 7.2, assists: 4.8, minutes: 33.0, games_played: 55 } }
+    ]
+  },
+  'PHX': {
+    id: 23,
+    name: 'Phoenix Suns',
+    abbreviation: 'PHX',
+    conference: 'West',
+    stats: {
+      avg_points_for: 113.2,
+      avg_points_against: 114.5,
+      record: '30-35',
+      conference_rank: 11,
+      form: ['L','L','W','L','L'],
+      last10_avg_total: 227.7
+    },
+    players: [
+      { name: 'Kevin Durant', position: 'SF', season_avg: { points: 26.8, rebounds: 6.2, assists: 4.3, minutes: 36.5, games_played: 58 } },
+      { name: 'Devin Booker', position: 'SG', season_avg: { points: 26.2, rebounds: 4.0, assists: 6.8, minutes: 36.0, games_played: 60 } }
+    ]
+  },
+  'MEM': {
+    id: 17,
+    name: 'Memphis Grizzlies',
+    abbreviation: 'MEM',
+    conference: 'West',
+    stats: {
+      avg_points_for: 117.5,
+      avg_points_against: 114.2,
+      record: '41-24',
+      conference_rank: 4,
+      form: ['W','W','W','L','W'],
+      last10_avg_total: 231.7
+    },
+    players: [
+      { name: 'Ja Morant', position: 'PG', season_avg: { points: 23.5, rebounds: 4.2, assists: 7.5, minutes: 33.5, games_played: 50 } },
+      { name: 'Jaren Jackson Jr.', position: 'PF', season_avg: { points: 22.5, rebounds: 5.8, assists: 2.2, minutes: 32.0, games_played: 62 } }
+    ]
   }
 };
 
@@ -315,23 +441,25 @@ async function getNBAGames(date) {
   // Try API first if key is available
   if (BALLDONTLIE_API_KEY) {
     try {
-      // Get games for the season and filter by date
-      const data = await fetchFromBalldontlieAPI(`/games?seasons[]=${season}&per_page=100`);
+      // Use date range for better API performance (start_date and end_date)
+      // This gets all games for the specific date
+      const data = await fetchFromBalldontlieAPI(`/games?start_date=${formattedDate}&end_date=${formattedDate}&per_page=50`);
       
       if (data && data.data) {
-        console.log(`   📊 API Response: ${data.data.length} total games this season`);
+        console.log(`   📊 API Response: ${data.data.length} games for ${formattedDate}`);
         
-        // Filter games for target date and not started
-        const todayGames = data.data.filter(game => {
-          const gameDate = new Date(game.date).toISOString().split('T')[0];
-          return gameDate === formattedDate && 
-                 (game.status === 'Scheduled' || game.time);
+        // Filter for games that haven't started yet (Scheduled or with time but not Final)
+        const upcomingGames = data.data.filter(game => {
+          return game.status !== 'Final' && game.period === 0;
         });
         
-        console.log(`   📊 Games scheduled for ${formattedDate}: ${todayGames.length}`);
+        // If all games are Final/completed, still include them for demo purposes
+        const gamesToUse = upcomingGames.length > 0 ? upcomingGames : data.data;
         
-        if (todayGames.length > 0) {
-          return todayGames.map(game => ({
+        console.log(`   📊 Games available: ${gamesToUse.length} (${upcomingGames.length} upcoming)`);
+        
+        if (gamesToUse.length > 0) {
+          return gamesToUse.map(game => ({
             game_id: game.id,
             league: { id: 12, name: "NBA", country: "USA", tier: 1 },
             home: {
