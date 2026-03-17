@@ -80,6 +80,11 @@ export interface Prediction {
   source?: 'manual' | 'daily_auto' | 'scanner';
   qualityTier?: 'A_PLUS' | 'B' | 'REJECTED';
   riskFactors?: string[];
+  // Player Props Support
+  pickType?: 'team' | 'player_prop';
+  playerName?: string;
+  playerTeam?: string;
+  line?: number;
   // Odds Shopping
   allOdds?: OddOption[];
   bestBookmaker?: string;

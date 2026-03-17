@@ -54,6 +54,12 @@ CREATE TABLE IF NOT EXISTS predictions (
   -- Source Tracking (NEW)
   source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'daily_auto', 'scanner')),
   
+  -- Player Props Support (NBA, etc.)
+  pick_type TEXT DEFAULT 'team' CHECK (pick_type IN ('team', 'player_prop')),
+  player_name TEXT DEFAULT NULL,
+  player_team TEXT DEFAULT NULL,
+  line DECIMAL DEFAULT NULL,
+  
   -- Odds Shopping (Optional)
   all_odds JSONB,           -- Array of {bookmaker, odds} objects
   best_bookmaker TEXT,
@@ -81,6 +87,18 @@ CREATE INDEX IF NOT EXISTS idx_predictions_source ON predictions(source);
 CREATE INDEX IF NOT EXISTS idx_predictions_quality_tier ON predictions(quality_tier);
 CREATE INDEX IF NOT EXISTS idx_predictions_sport ON predictions(sport);
 CREATE INDEX IF NOT EXISTS idx_predictions_league ON predictions(league);
+CREATE INDEX IF NOT EXISTS idx_predictions_pick_type ON predictions(pick_type);
+CREATE INDEX IF NOT EXISTS idx_predictions_player_name ON predictions(player_name);
+
+-- =====================================================
+-- ALTER TABLE for existing databases (run these if table already exists)
+-- =====================================================
+
+-- Add player props columns if they don't exist
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS pick_type TEXT DEFAULT 'team' CHECK (pick_type IN ('team', 'player_prop'));
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS player_name TEXT DEFAULT NULL;
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS player_team TEXT DEFAULT NULL;
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS line DECIMAL DEFAULT NULL;
 
 -- RLS Policies
 ALTER TABLE predictions ENABLE ROW LEVEL SECURITY;

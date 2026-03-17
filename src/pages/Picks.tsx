@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import PickCard from '../components/PickCard';
 import { Prediction } from '../types';
-import { Loader2, RefreshCw, Filter, Zap, Clock, TrendingUp, Radar, ChevronRight, Sparkles, Bot, User, Shield } from 'lucide-react';
+import { Loader2, RefreshCw, Zap, Clock, TrendingUp, Radar, ChevronRight, Sparkles, Shield, CircleDot, Dribbble, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PicksProps {
@@ -11,8 +11,8 @@ interface PicksProps {
 export default function Picks({ onOpenScanner }: PicksProps) {
   const [picks, setPicks] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'live' | 'upcoming' | 'auto'>('all');
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'live' | 'upcoming' | 'auto' | 'football' | 'basketball' | 'baseball'>('all');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [generateResult, setGenerateResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -32,12 +32,24 @@ export default function Picks({ onOpenScanner }: PicksProps) {
     }
   };
 
-  const generateDailyPicks = async () => {
-    setGenerating(true);
+  const generatePicksForSport = async (sport: 'football' | 'basketball' | 'baseball') => {
+    setGenerating(sport);
     setGenerateResult(null);
     
+    const endpoints: Record<string, string> = {
+      football: '/api/generate-daily-picks',
+      basketball: '/api/generate-nba-picks',
+      baseball: '/api/generate-baseball-picks'
+    };
+    
+    const sportNames: Record<string, string> = {
+      football: 'Fútbol',
+      basketball: 'NBA',
+      baseball: 'MLB'
+    };
+    
     try {
-      const response = await fetch('/api/generate-daily-picks', {
+      const response = await fetch(endpoints[sport], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -46,29 +58,27 @@ export default function Picks({ onOpenScanner }: PicksProps) {
       const data = await response.json();
       
       if (response.ok) {
-        // Handle the "no quality picks" message
         if (data.message && data.picks_generated === 0) {
           setGenerateResult({
             success: false,
-            message: data.message
+            message: `${sportNames[sport]}: ${data.message}`
           });
         } else if (data.picks_generated > 0) {
           setGenerateResult({
             success: true,
-            message: `¡${data.picks_generated} pick${data.picks_generated > 1 ? 's' : ''} de calidad generados!`
+            message: `¡${data.picks_generated} pick${data.picks_generated > 1 ? 's' : ''} de ${sportNames[sport]} generados!`
           });
         } else {
           setGenerateResult({
             success: false,
-            message: data.message || 'No se encontraron picks de calidad'
+            message: `${sportNames[sport]}: No se encontraron picks de calidad`
           });
         }
-        // Refresh picks after generation
         await fetchPicks();
       } else {
         setGenerateResult({
           success: false,
-          message: data.message || 'Error al generar picks'
+          message: data.error || `Error al generar picks de ${sportNames[sport]}`
         });
       }
     } catch (error: any) {
@@ -77,21 +87,25 @@ export default function Picks({ onOpenScanner }: PicksProps) {
         message: error.message || 'Error de conexión'
       });
     } finally {
-      setGenerating(false);
+      setGenerating(null);
     }
   };
-
-  // No auto-fetch - user must click button to load picks
 
   const filteredPicks = picks.filter(pick => {
     if (activeFilter === 'live') return pick.isLive;
     if (activeFilter === 'upcoming') return !pick.isLive;
     if (activeFilter === 'auto') return pick.source === 'daily_auto';
+    if (activeFilter === 'football') return pick.sport?.toLowerCase() === 'football';
+    if (activeFilter === 'basketball') return pick.sport?.toLowerCase() === 'basketball';
+    if (activeFilter === 'baseball') return pick.sport?.toLowerCase() === 'baseball';
     return true;
   });
 
   const liveCount = picks.filter(p => p.isLive).length;
   const autoCount = picks.filter(p => p.source === 'daily_auto').length;
+  const footballCount = picks.filter(p => p.sport?.toLowerCase() === 'football').length;
+  const basketballCount = picks.filter(p => p.sport?.toLowerCase() === 'basketball').length;
+  const baseballCount = picks.filter(p => p.sport?.toLowerCase() === 'baseball').length;
 
   if (loading && picks.length === 0) {
     return (
@@ -162,28 +176,77 @@ export default function Picks({ onOpenScanner }: PicksProps) {
         </div>
       </div>
 
-      {/* Generate Daily Picks Button */}
-      <motion.button
-        whileTap={{ scale: 0.98 }}
-        onClick={generateDailyPicks}
-        disabled={generating}
-        className="w-full bg-gradient-to-r from-[var(--color-accent-primary)] to-[var(--color-accent-secondary)] text-white p-4 rounded-2xl flex items-center justify-between shadow-lg disabled:opacity-50"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            {generating ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Sparkles className="w-5 h-5" />
-            )}
+      {/* Multi-Sport Generation Buttons */}
+      <div className="space-y-3">
+        {/* Football */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => generatePicksForSport('football')}
+          disabled={generating !== null}
+          className="w-full bg-gradient-to-r from-emerald-500 to-green-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg disabled:opacity-50"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              {generating === 'football' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <CircleDot className="w-5 h-5" />
+              )}
+            </div>
+            <div className="text-left">
+              <p className="font-bold">Fútbol</p>
+              <p className="text-xs text-white/70">Top 5 ligas + UEFA</p>
+            </div>
           </div>
-          <div className="text-left">
-            <p className="font-bold">{generating ? 'Generando picks...' : 'Generar Picks de Hoy'}</p>
-            <p className="text-xs text-white/70">Hasta 3 picks de alta calidad con DeepSeek AI</p>
+          <ChevronRight className="w-5 h-5 text-white/60" />
+        </motion.button>
+
+        {/* NBA */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => generatePicksForSport('basketball')}
+          disabled={generating !== null}
+          className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg disabled:opacity-50"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              {generating === 'basketball' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Dribbble className="w-5 h-5" />
+              )}
+            </div>
+            <div className="text-left">
+              <p className="font-bold">NBA + Player Props</p>
+              <p className="text-xs text-white/70">Puntos, rebotes, asistencias</p>
+            </div>
           </div>
-        </div>
-        <ChevronRight className="w-5 h-5 text-white/60" />
-      </motion.button>
+          <ChevronRight className="w-5 h-5 text-white/60" />
+        </motion.button>
+
+        {/* MLB */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={() => generatePicksForSport('baseball')}
+          disabled={generating !== null}
+          className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-4 rounded-2xl flex items-center justify-between shadow-lg disabled:opacity-50"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              {generating === 'baseball' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Trophy className="w-5 h-5" />
+              )}
+            </div>
+            <div className="text-left">
+              <p className="font-bold">MLB</p>
+              <p className="text-xs text-white/70">Run lines, totales</p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-white/60" />
+        </motion.button>
+      </div>
 
       {/* Generate Result Message */}
       <AnimatePresence>
@@ -242,15 +305,39 @@ export default function Picks({ onOpenScanner }: PicksProps) {
         </motion.div>
         <motion.div 
           whileTap={{ scale: 0.95 }}
-          onClick={() => setActiveFilter('auto')}
+          onClick={() => setActiveFilter('football')}
           className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
-            activeFilter === 'auto' 
-              ? 'bg-purple-500 text-white' 
+            activeFilter === 'football' 
+              ? 'bg-emerald-500 text-white' 
               : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
           }`}
         >
-          <Bot className="w-3 h-3" />
-          Auto ({autoCount})
+          <CircleDot className="w-3 h-3" />
+          Fútbol ({footballCount})
+        </motion.div>
+        <motion.div 
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setActiveFilter('basketball')}
+          className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
+            activeFilter === 'basketball' 
+              ? 'bg-orange-500 text-white' 
+              : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+          }`}
+        >
+          <Dribbble className="w-3 h-3" />
+          NBA ({basketballCount})
+        </motion.div>
+        <motion.div 
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setActiveFilter('baseball')}
+          className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all cursor-pointer flex items-center gap-2 ${
+            activeFilter === 'baseball' 
+              ? 'bg-blue-500 text-white' 
+              : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+          }`}
+        >
+          <Trophy className="w-3 h-3" />
+          MLB ({baseballCount})
         </motion.div>
       </div>
 

@@ -1149,6 +1149,43 @@ IMPORTANTE:
   });
 
   // =====================================================
+  // NBA Picks Auto-Generation Endpoint (with Player Props)
+  // =====================================================
+
+  app.post("/api/generate-nba-picks", async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+      const { default: generateNBAPicks } = await import('./api/generate-nba-picks.js');
+      return generateNBAPicks(req, res);
+    } catch (error: any) {
+      console.error("NBA Picks Error:", error);
+      return res.status(500).json({
+        error: "Failed to generate NBA picks",
+        message: error.message,
+        execution_time_ms: Date.now() - startTime
+      });
+    }
+  });
+
+  // =====================================================
+  // MLB Picks Auto-Generation Endpoint
+  // =====================================================
+
+  app.post("/api/generate-baseball-picks", async (req, res) => {
+    // Placeholder - returns not implemented yet
+    return res.status(200).json({
+      date: new Date().toISOString().split('T')[0],
+      picks_generated: 0,
+      picks: [],
+      discarded_count: 0,
+      api_requests_used: 0,
+      execution_time_ms: 0,
+      message: "MLB picks generation coming soon! Baseball season analysis in development."
+    });
+  });
+
+  // =====================================================
   // Vite middleware for development
   // =====================================================
 
