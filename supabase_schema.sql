@@ -297,6 +297,53 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =====================================================
+-- Assets Cache Table (for TheSportsDB images/logos)
+-- Caches team logos and player photos for 7 days
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS assets_cache (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('team', 'player')),
+  entity_name TEXT NOT NULL,
+  entity_sport TEXT DEFAULT 'football',  -- football, basketball, baseball
+  sportsdb_id TEXT,
+  logo_url TEXT,
+  photo_url TEXT,
+  cutout_url TEXT,           -- Player cutout with transparent background
+  banner_url TEXT,           -- Team banner
+  jersey_url TEXT,           -- Team jersey image
+  primary_color TEXT,        -- Team primary color (hex)
+  secondary_color TEXT,      -- Team secondary color (hex)
+  extra_data JSONB DEFAULT '{}',  -- Additional fields from TheSportsDB
+  cached_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '7 days',
+  UNIQUE(entity_type, entity_name)
+);
+
+-- Indexes for assets cache lookups
+CREATE INDEX IF NOT EXISTS idx_assets_cache_type_name ON assets_cache(entity_type, entity_name);
+CREATE INDEX IF NOT EXISTS idx_assets_cache_expires ON assets_cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_assets_cache_sport ON assets_cache(entity_sport);
+
+-- Function to clean expired assets cache
+CREATE OR REPLACE FUNCTION clean_expired_assets_cache()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM assets_cache WHERE expires_at < NOW();
+END;
+$$ LANGUAGE plpgsql;
+
+-- Policy: Public read access for assets cache (images should be publicly viewable)
+CREATE POLICY "Assets cache is publicly readable"
+  ON assets_cache FOR SELECT
+  USING (true);
+
+-- Policy: Service role can manage assets cache
+CREATE POLICY "Service role can manage assets cache"
+  ON assets_cache FOR ALL
+  USING (auth.jwt()->>'role' = 'service_role');
+
+-- =====================================================
 -- Sample Data (for testing)
 -- =====================================================
 

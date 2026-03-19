@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Prediction, calculateExtraEdge, calculateLineMovement, calculateKellyStake, deriveWinProbabilityFromEdge, getBankroll } from '../types';
 import { TrendingUp, Verified, Target, BookOpen, X, Clock, Flame, Zap, Building2, Bookmark, Check, ShoppingBag, ArrowUpRight, RefreshCw, ArrowUp, ArrowDown, Minus, Calculator, AlertTriangle, Info, Wallet, Percent, Shield, Bot, User, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { TeamLogosMatch, PlayerPhoto } from './AssetComponents';
 
 const STORAGE_KEY = 'coco_vip_predictions';
 
@@ -150,6 +151,15 @@ export default function PickCard({ pick, onDetail, onUpdate }: PickCardProps) {
             />
           ) : null}
           
+          {/* Team Logos Overlay */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <TeamLogosMatch
+              homeTeam={currentPick.homeTeam || currentPick.matchName.split(' vs ')[0]}
+              awayTeam={currentPick.awayTeam || currentPick.matchName.split(' vs ')[1]}
+              size="lg"
+            />
+          </div>
+          
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           
           {/* Sport Badge */}
@@ -230,10 +240,13 @@ export default function PickCard({ pick, onDetail, onUpdate }: PickCardProps) {
             {/* Player Prop Special Display */}
             {currentPick.pickType === 'player_prop' && currentPick.playerName && (
               <div className="rounded-xl p-3 border border-orange-500/30" style={{ backgroundColor: 'rgba(249, 115, 22, 0.1)' }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 flex items-center justify-center">
-                    <Users className="w-4 h-4 text-white" />
-                  </div>
+                <div className="flex items-center gap-3 mb-2">
+                  <PlayerPhoto 
+                    playerName={currentPick.playerName} 
+                    teamName={currentPick.playerTeam}
+                    size="lg"
+                    showPosition={true}
+                  />
                   <div>
                     <p className="text-sm font-bold text-[var(--color-text-primary)]">{currentPick.playerName}</p>
                     {currentPick.playerTeam && (
