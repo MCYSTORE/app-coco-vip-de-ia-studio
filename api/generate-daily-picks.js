@@ -1,13 +1,13 @@
 /**
  * Football Picks Generation API
  * 
- * POST /api/generate-football-picks
+ * POST /api/generate-daily-picks
  * Body: { date?: string }
  * 
  * Architecture:
  * 1. Data Layer: Fetch from API-Football v3
- * 2. Build clean match data object
- * 3. Validate minimum data
+ * 2. Build clean match data object (EXACT structure)
+ * 3. Validate minimum data (2+ missing = discard)
  * 4. Pass ONLY the object to LLM (no endpoints, URLs, or frontend code)
  */
 
@@ -57,8 +57,7 @@ const CONFIG = {
   
   // Validation thresholds
   MIN_FORM_MATCHES: 5,
-  MIN_H2H_MATCHES: 3,
-  MIN_VALIDATION_SCORE: 4
+  MIN_H2H_MATCHES: 3
 };
 
 const DISCARD_REASONS = {
@@ -220,9 +219,7 @@ async function getTeamStatistics(leagueId, season, teamId) {
     partidos_sin_anotar_casa: s.failed_to_score?.home || 0,
     partidos_sin_anotar_fuera: s.failed_to_score?.away || 0,
     formacion_habitual: s.lineups?.[0]?.formation || 'Unknown',
-    // Corners
-    corners_favor: s.cards?.total || 0,
-    promedio_corners_favor: parseFloat(s.cards?.total) / (s.fixtures?.played || 1) || 0
+    promedio_corners_favor: (s.cards?.total || 0) / (s.fixtures?.played || 1) || 0
   };
   
   teamStatsCache.set(cacheKey, { data: result, timestamp: Date.now() });
@@ -245,7 +242,6 @@ async function getRecentForm(teamId) {
     return { resultado, gf, ga, fue_local: isHome };
   });
   
-  // Calculate streak
   let racha = '';
   for (const m of matches) {
     if (racha === '' || racha[0] === m.resultado) {
@@ -256,12 +252,21 @@ async function getRecentForm(teamId) {
   const totalGF = matches.reduce((sum, m) => sum + m.gf, 0);
   const totalGA = matches.reduce((sum, m) => sum + m.ga, 0);
   
+  // Calculate % times scored as home/away
+  const homeMatches = matches.filter(m => m.fue_local);
+  const awayMatches = matches.filter(m => !m.fue_local);
+  
+  const scoredAsHome = homeMatches.filter(m => m.gf > 0).length;
+  const scoredAsAway = awayMatches.filter(m => m.gf > 0).length;
+  
   return {
     ultimos10: matches,
     promedio_gf: Math.round((totalGF / matches.length) * 100) / 100,
     promedio_ga: Math.round((totalGA / matches.length) * 100) / 100,
     racha_actual: racha || 'N/A',
-    partidos_count: matches.length
+    partidos_count: matches.length,
+    porcentaje_anota_local: homeMatches.length > 0 ? Math.round((scoredAsHome / homeMatches.length) * 100) : 50,
+    porcentaje_anota_visitante: awayMatches.length > 0 ? Math.round((scoredAsAway / awayMatches.length) * 100) : 50
   };
 }
 
@@ -293,13 +298,18 @@ async function getH2H(homeId, awayId) {
     ? Math.round((ultimos10.reduce((s, m) => s + m.goles_total, 0) / ultimos10.length) * 100) / 100
     : 0;
   
+  // Calculate BTTS percentage in H2H
+  const bttsCount = ultimos10.filter(m => m.goles_total > 0 && 
+    m.ganador !== 'empate' || (m.goles_total >= 2)).length;
+  
   return {
     ultimos10,
     promedio_goles_total: avgGoals,
     victorias_local,
     victorias_visitante,
     empates,
-    over25_porcentaje: ultimos10.length > 0 ? `${Math.round((over25 / ultimos10.length) * 100)}%` : '0%'
+    over25_porcentaje: ultimos10.length > 0 ? `${Math.round((over25 / ultimos10.length) * 100)}%` : '0%',
+    btts_porcentaje: ultimos10.length > 0 ? `${Math.round((bttsCount / ultimos10.length) * 100)}%` : '50%'
   };
 }
 
@@ -459,7 +469,6 @@ async function getKeyPlayers(teamId) {
   const fixturesData = await fetchAPI(`fixtures?team=${teamId}&last=5`);
   if (!fixturesData?.response || fixturesData.response.length === 0) return [];
   
-  // Collect player stats from last 5 matches
   const allPlayers = new Map();
   
   for (const fixture of fixturesData.response) {
@@ -492,7 +501,6 @@ async function getKeyPlayers(teamId) {
     }
   }
   
-  // Calculate averages and return top 3 by minutes
   return Array.from(allPlayers.values())
     .filter(p => p.total_minutos > 0)
     .map(p => ({
@@ -510,40 +518,33 @@ async function getKeyPlayers(teamId) {
 }
 
 async function getCorners(homeId, awayId, leagueId, season) {
-  // Get corner stats from team statistics
   const [homeStats, awayStats] = await Promise.all([
     getTeamStatistics(leagueId, season, homeId),
     getTeamStatistics(leagueId, season, awayId)
   ]);
   
-  // Estimate corners based on team tendencies
-  // Note: API-Football corners data is in the cards field for some reason
   const promedio_local_favor = homeStats?.promedio_corners_favor || 5.5;
   const promedio_visitante_favor = awayStats?.promedio_corners_favor || 4.5;
   
-  // Estimate: home team usually gets more corners at home
   const local_favor_estimado = promedio_local_favor * 1.1;
-  const local_contra_estimado = promedio_visitante_favor * 0.9;
   const visitante_favor_estimado = promedio_visitante_favor * 0.9;
-  const visitante_contra_estimado = promedio_local_favor * 1.1;
   
   return {
     promedio_local_a_favor: Math.round(local_favor_estimado * 10) / 10,
-    promedio_local_en_contra: Math.round(local_contra_estimado * 10) / 10,
+    promedio_local_en_contra: Math.round(visitante_favor_estimado * 10) / 10,
     promedio_visitante_a_favor: Math.round(visitante_favor_estimado * 10) / 10,
-    promedio_visitante_en_contra: Math.round(visitante_contra_estimado * 10) / 10,
+    promedio_visitante_en_contra: Math.round(local_favor_estimado * 10) / 10,
     total_estimado: Math.round((local_favor_estimado + visitante_favor_estimado) * 10) / 10
   };
 }
 
 // =====================================================
-// BUILD MATCH DATA OBJECT
+// BUILD MATCH DATA OBJECT (EXACT STRUCTURE)
 // =====================================================
 
 async function buildMatchDataObject(fixture, season) {
   console.log(`   📊 Building: ${fixture.home_name} vs ${fixture.away_name}`);
   
-  // Fetch all data in parallel where possible
   const [standings, homeStats, awayStats, homeForm, awayForm, h2h, odds, prediction, injuries] = await Promise.all([
     getStandings(fixture.league_id, season),
     getTeamStatistics(fixture.league_id, season, fixture.home_id),
@@ -558,14 +559,11 @@ async function buildMatchDataObject(fixture, season) {
       : Promise.resolve({ local: [], visitante: [] })
   ]);
   
-  // Find standings for each team
   const standingsLocal = standings.find(t => t.team_id === fixture.home_id);
   const standingsVisitante = standings.find(t => t.team_id === fixture.away_id);
   
-  // Get corners
   const corners = await getCorners(fixture.home_id, fixture.away_id, fixture.league_id, season);
   
-  // Get key players (only if budget allows)
   let jugadores_clave = { local: [], visitante: [] };
   if (requestCountToday < CONFIG.MAX_API_REQUESTS - 15) {
     const [homePlayers, awayPlayers] = await Promise.all([
@@ -575,7 +573,10 @@ async function buildMatchDataObject(fixture, season) {
     jugadores_clave = { local: homePlayers, visitante: awayPlayers };
   }
   
-  // Build the final object
+  // =====================================================
+  // EXACT DATA OBJECT STRUCTURE (as specified)
+  // =====================================================
+  
   const matchData = {
     partido: `${fixture.home_name} vs ${fixture.away_name}`,
     liga: fixture.league_name,
@@ -609,6 +610,8 @@ async function buildMatchDataObject(fixture, season) {
         promedio_goles_recibidos_casa: homeStats.promedio_goles_recibidos_casa,
         partidos_sin_recibir_casa: homeStats.partidos_sin_recibir_casa,
         partidos_sin_anotar_casa: homeStats.partidos_sin_anotar_casa,
+        clean_sheets_casa: homeStats.partidos_sin_recibir_casa,
+        failed_to_score_casa: homeStats.partidos_sin_anotar_casa,
         formacion_habitual: homeStats.formacion_habitual
       } : null,
       visitante: awayStats ? {
@@ -616,6 +619,8 @@ async function buildMatchDataObject(fixture, season) {
         promedio_goles_recibidos_fuera: awayStats.promedio_goles_recibidos_fuera,
         partidos_sin_recibir_fuera: awayStats.partidos_sin_recibir_fuera,
         partidos_sin_anotar_fuera: awayStats.partidos_sin_anotar_fuera,
+        clean_sheets_fuera: awayStats.partidos_sin_recibir_fuera,
+        failed_to_score_fuera: awayStats.partidos_sin_anotar_fuera,
         formacion_habitual: awayStats.formacion_habitual
       } : null
     },
@@ -646,7 +651,7 @@ async function buildMatchDataObject(fixture, season) {
     
     jugadores_clave,
     
-    // Internal tracking (not passed to LLM)
+    // Internal tracking (NOT passed to LLM)
     _meta: {
       fixture_id: fixture.fixture_id,
       league_id: fixture.league_id
@@ -657,109 +662,274 @@ async function buildMatchDataObject(fixture, season) {
 }
 
 // =====================================================
-// VALIDATION
+// VALIDATION (2+ missing = discard)
 // =====================================================
 
 function validateMatchData(matchData) {
-  let score = 0;
-  const issues = [];
+  const missing = [];
   
-  // 1. Standings de ambos equipos presentes
-  if (matchData.standings?.local?.posicion && matchData.standings?.visitante?.posicion) {
-    score++;
-  } else {
-    issues.push('standings_missing');
-  }
+  // 1. standings - both teams must have position
+  const hasStandings = matchData.standings?.local?.posicion && matchData.standings?.visitante?.posicion;
+  if (!hasStandings) missing.push('standings');
   
-  // 2. forma_reciente con mín 5 partidos
-  if (matchData.forma_reciente?.local?.partidos_count >= CONFIG.MIN_FORM_MATCHES) {
-    score++;
-  } else {
-    issues.push('home_form_insufficient');
-  }
+  // 2. forma_reciente - min 5 matches for both teams
+  const hasLocalForm = matchData.forma_reciente?.local?.partidos_count >= CONFIG.MIN_FORM_MATCHES;
+  const hasAwayForm = matchData.forma_reciente?.visitante?.partidos_count >= CONFIG.MIN_FORM_MATCHES;
+  if (!hasLocalForm && !hasAwayForm) missing.push('forma_reciente');
+  else if (!hasLocalForm || !hasAwayForm) missing.push('forma_reciente_parcial');
   
-  if (matchData.forma_reciente?.visitante?.partidos_count >= CONFIG.MIN_FORM_MATCHES) {
-    score++;
-  } else {
-    issues.push('away_form_insufficient');
-  }
+  // 3. cuotas.resultado - must have 1X2 odds
+  const hasOdds = matchData.cuotas?.resultado?.['1'] > 0;
+  if (!hasOdds) missing.push('cuotas_resultado');
   
-  // 3. cuotas.resultado presentes
-  if (matchData.cuotas?.resultado?.['1'] > 0) {
-    score++;
-  } else {
-    issues.push('odds_missing');
-  }
+  // 4. prediccion_api - must have winner suggestion
+  const hasPrediction = matchData.prediccion_api?.ganador_sugerido;
+  if (!hasPrediction) missing.push('prediccion_api');
   
-  // 4. prediccion_api presente
-  if (matchData.prediccion_api?.ganador_sugerido) {
-    score++;
-  } else {
-    issues.push('prediction_missing');
-  }
+  // 5. h2h - min 3 matches
+  const hasH2H = matchData.h2h?.ultimos10?.length >= CONFIG.MIN_H2H_MATCHES;
+  if (!hasH2H) missing.push('h2h');
   
-  // 5. h2h con mín 3 partidos
-  if (matchData.h2h?.ultimos10?.length >= CONFIG.MIN_H2H_MATCHES) {
-    score++;
-  } else {
-    issues.push('h2h_insufficient');
-  }
+  // Count critical missing (exclude partial)
+  const criticalMissing = missing.filter(m => !m.includes('parcial'));
+  
+  // VALIDATION RULE: 2+ missing = discard
+  const shouldDiscard = criticalMissing.length >= 2;
   
   return {
-    valid: score >= CONFIG.MIN_VALIDATION_SCORE,
-    score,
-    max: 6,
-    issues
+    valid: !shouldDiscard,
+    missing,
+    criticalMissingCount: criticalMissing.length,
+    details: {
+      hasStandings,
+      hasLocalForm,
+      hasAwayForm,
+      hasOdds,
+      hasPrediction,
+      hasH2H
+    }
   };
 }
 
 // =====================================================
-// LLM ANALYSIS
+// LLM ANALYSIS WITH NEW SYSTEM PROMPT
 // =====================================================
 
 async function analyzeWithLLM(matchData) {
   if (!OPENROUTERFREE_API_KEY) return null;
   
-  const SYSTEM_PROMPT = `Eres un analista experto en apuestas deportivas con criterio EXTREMADAMENTE CONSERVADOR.
-Analizas partidos de fútbol basándote EXCLUSIVAMENTE en el objeto de datos proporcionado.
-RESPONDE SIEMPRE EN ESPAÑOL Y EN JSON VÁLIDO.
+  // =====================================================
+  // COMPLETE SYSTEM PROMPT (as provided)
+  // =====================================================
+  
+  const SYSTEM_PROMPT = `Eres Coco, analista experto en fútbol y value bets.
+Recibes un JSON con datos reales de un partido.
+Responde SIEMPRE en español y en JSON válido.
 
-MERCADOS DISPONIBLES:
-- resultado (1X2): "1"=local, "X"=empate, "2"=visitante
-- over15, over25, over35: "over" o "under"
-- btts: "yes" o "no"
-- corners: "over" o "under"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 1 — CADENA DE PENSAMIENTO INTERNO
+(ejecutar antes de generar el JSON final)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-TAREA:
-1. Estimar probabilidad real basándote en los datos
-2. Comparar con probabilidades_implicitas_normalizadas
-3. Calcular EV = (prob_estimada * cuota) - 1
-4. Proponer el pick con mayor valor (EV > 4%)
+Antes de responder, valida internamente:
 
-╔══════════════════════════════════════════════════════════════╗
-║  ESCALA DE CONFIANZA:                                        ║
-╠══════════════════════════════════════════════════════════════╣
-║  >= 0.80: 4+ factores sólidos, EV >= 8%                      ║
-║  0.65-0.79: 2-3 factores, EV 4-8%                            ║
-║  < 0.65: NO proponer pick                                    ║
-╚══════════════════════════════════════════════════════════════╝
+A) CALIDAD DE DATOS
+   ¿Tienes forma reciente de ambos equipos (mín 5 partidos)?
+   ¿Tienes cuotas reales?
+   ¿Tienes standings y H2H?
+   → Si faltan 2 o más bloques: marcar data_quality="baja"
+     y no proponer ningún value_bet=true.
 
-FORMATO RESPUESTA:
+B) CÁLCULO DE PROBABILIDADES
+   Para cada mercado calcular:
+   prob_implicita = 1 / cuota
+   prob_normalizada = prob_implicita / suma_todas_implicitas
+   prob_estimada = tu estimación basada en los datos
+   EV = (prob_estimada × cuota) - 1
+
+C) REFINAMIENTO ITERATIVO DEL EV
+   Después de calcular el EV inicial, aplicar ajustes:
+   - Lesionado titular en equipo favorecido:
+     reducir prob_estimada en 0.05
+   - Partido back-to-back:
+     reducir prob_estimada en 0.03
+   - H2H contradice la forma reciente:
+     reducir confidence en 0.10
+   - Predicción poisson de la API coincide con tu pick:
+     aumentar confidence en 0.05
+   Recalcular EV con prob_estimada ajustada.
+   Este es el EV final que usarás en el JSON.
+
+D) VALIDACIÓN DE CONFIANZA (no negociable)
+   0.80+     → Solo si 4+ factores alineados Y EV >= 0.08
+   0.65–0.79 → 2-3 factores, EV entre 0.04 y 0.08
+   < 0.65    → value_bet: false obligatoriamente
+   PROHIBIDO dar confidence > 0.75 sin al menos
+   3 factores explícitos en supporting_factors.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 2 — ANALIZAR LOS 5 MERCADOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MERCADO 1 — RESULTADO (1X2)
+Usar: standings, forma como local/visitante específicamente,
+H2H, lesionados, poisson de la API.
+Calcular EV para las 3 opciones (1, X, 2).
+Proponer solo la selección con EV ajustado más alto.
+
+MERCADO 2 — AMBOS ANOTAN (BTTS)
+Estimar:
+  prob_local_anota  = % veces anotó como local en last10
+  prob_visitante_anota = % veces anotó como visitante en last10
+  prob_btts = prob_local_anota × prob_visitante_anota
+Cruzar con:
+  clean_sheets de ambos equipos
+  failed_to_score de ambos equipos
+  % de BTTS en H2H recientes
+  Lesionados: ¿falta el goleador principal?
+
+MERCADO 3 — TOTAL GOLES (OVER/UNDER)
+Calcular xG estimado:
+  xG = promedio_goles_anotados_local_en_casa
+     + promedio_goles_anotados_visitante_fuera
+Comparar xG con líneas 1.5 / 2.5 / 3.5 disponibles.
+Usar también: avg_total_goals de H2H y over25_porcentaje.
+Elegir la línea con mayor EV ajustado.
+
+MERCADO 4 — CORNERS (ALTA/BAJA)
+Calcular total estimado:
+  total = promedio_corners_a_favor_local
+        + promedio_corners_a_favor_visitante
+Comparar con línea disponible (típico 9.5 o 10.5).
+Si no hay cuota: reportar tendencia informativa únicamente.
+Considerar: equipos ofensivos generan más corners,
+formaciones atacantes vs defensivas.
+
+MERCADO 5 — PROYECCIÓN INTEGRADA
+Cruzar los 4 mercados anteriores para dar:
+- Resultado más probable del partido
+- Marcador estimado orientativo
+- Rango de goles esperado
+- Rango de corners esperado
+- Si BTTS es probable o no
+- El pick con mayor EV de los 4 mercados anteriores
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASO 3 — FORMATO DE RESPUESTA JSON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Responde ÚNICAMENTE con este JSON, sin texto fuera de él:
+
 {
-  "pick": {
-    "market": "resultado" | "over25" | "over15" | "over35" | "btts" | "corners",
-    "selection": "1" | "X" | "2" | "over" | "under" | "yes" | "no",
-    "estimated_prob": 0.0-1.0,
-    "bookmaker_odds": number,
-    "expected_value": number,
-    "value_bet": boolean
-  },
-  "analysis": "120-180 palabras: forma, standings, H2H, valor de cuota, riesgos",
-  "confidence": 0.0-1.0,
-  "risk_factors": ["factor1", "factor2"],
-  "no_value_reason": "string o null"
-}`;
+  "partido": "string",
+  "liga": "string",
+  "data_quality": "alta" | "media" | "baja",
 
+  "mercados": {
+
+    "resultado_1x2": {
+      "seleccion": "1" | "X" | "2",
+      "prob_estimada": number,
+      "prob_implicita_normalizada": number,
+      "cuota": number,
+      "ev_ajustado": number,
+      "value_bet": boolean,
+      "confidence": number,
+      "analisis": "máx 80 palabras citando datos concretos"
+    },
+
+    "ambos_anotan": {
+      "seleccion": "yes" | "no",
+      "prob_local_anota": number,
+      "prob_visitante_anota": number,
+      "prob_btts_estimada": number,
+      "cuota": number,
+      "ev_ajustado": number,
+      "value_bet": boolean,
+      "confidence": number,
+      "analisis": "máx 60 palabras"
+    },
+
+    "total_goles": {
+      "xg_estimado": number,
+      "seleccion": "over" | "under",
+      "linea": number,
+      "cuota": number,
+      "ev_ajustado": number,
+      "value_bet": boolean,
+      "confidence": number,
+      "analisis": "máx 60 palabras"
+    },
+
+    "corners": {
+      "total_estimado": number,
+      "tendencia": "alta" | "media" | "baja",
+      "linea": number | null,
+      "seleccion": "over" | "under" | "sin_cuota",
+      "cuota": number | null,
+      "ev_ajustado": number | null,
+      "value_bet": boolean,
+      "confidence": number,
+      "analisis": "máx 50 palabras"
+    },
+
+    "proyeccion_final": {
+      "resultado_probable": "1" | "X" | "2",
+      "marcador_estimado": "2-1",
+      "rango_goles": "2-3",
+      "rango_corners": "9-11",
+      "btts_probable": boolean,
+      "resumen": "máx 60 palabras integrando todo el análisis",
+      "mejor_pick": {
+        "mercado": "string",
+        "seleccion": "string",
+        "cuota": number,
+        "ev_ajustado": number
+      }
+    }
+  },
+
+  "picks_con_value": [
+    {
+      "mercado": "string",
+      "seleccion": "string",
+      "cuota": number,
+      "ev_ajustado": number,
+      "confidence": number
+    }
+  ],
+
+  "supporting_factors": [
+    "factor concreto 1",
+    "factor concreto 2",
+    "factor concreto 3"
+  ],
+
+  "risk_factors": [
+    "riesgo 1",
+    "riesgo 2"
+  ],
+
+  "ajustes_aplicados": [
+    "Descripción de cada ajuste del refinamiento iterativo aplicado"
+  ]
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGLAS FINALES PROHIBIDAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- NUNCA inventar datos no presentes en el JSON recibido
+- NUNCA omitir el campo ajustes_aplicados (usar [] si no aplica)
+- NUNCA emitir value_bet: true con confidence < 0.65
+- NUNCA dar confidence > 0.75 sin mínimo 3 supporting_factors
+- NUNCA responder con texto fuera del bloque JSON
+- NUNCA analizar partidos de ligas femeninas, juveniles
+  o segunda división`;
+
+  // Create clean object for LLM (remove _meta)
+  const cleanMatchData = { ...matchData };
+  delete cleanMatchData._meta;
+  
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -773,10 +943,10 @@ FORMATO RESPUESTA:
         model: CONFIG.LLM_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: JSON.stringify(matchData, null, 2) }
+          { role: "user", content: JSON.stringify(cleanMatchData, null, 2) }
         ],
         temperature: 0.1,
-        max_tokens: 800,
+        max_tokens: 1500,
         response_format: { type: "json_object" }
       })
     });
@@ -793,6 +963,143 @@ FORMATO RESPUESTA:
 }
 
 // =====================================================
+// PROCESS LLM RESULTS (NEW FORMAT)
+// =====================================================
+
+function processLLMResults(llmResult, matchData) {
+  if (!llmResult) return null;
+  
+  // Check data quality
+  if (llmResult.data_quality === 'baja') {
+    return null;
+  }
+  
+  // Get picks with value
+  const picksConValue = llmResult.picks_con_value || [];
+  
+  if (picksConValue.length === 0) {
+    return null;
+  }
+  
+  // Get the best pick
+  const bestPick = llmResult.mercados?.proyeccion_final?.mejor_pick || picksConValue[0];
+  
+  if (!bestPick) return null;
+  
+  // Validate confidence
+  const pickWithValue = picksConValue.find(p => 
+    p.mercado === bestPick.mercado && p.seleccion === bestPick.seleccion
+  );
+  
+  const confidence = pickWithValue?.confidence || 0;
+  const evAjustado = bestPick.ev_ajustado || 0;
+  
+  // Apply validation rules
+  if (confidence < CONFIG.MIN_CONFIDENCE) {
+    return { valid: false, reason: 'low_confidence', confidence, ev: evAjustado };
+  }
+  
+  if (evAjustado < CONFIG.MIN_EV) {
+    return { valid: false, reason: 'low_ev', confidence, ev: evAjustado };
+  }
+  
+  // Determine quality tier
+  let qualityTier = 'B';
+  if (evAjustado >= 0.08 && confidence >= 0.80) {
+    qualityTier = 'A_PLUS';
+  }
+  
+  // Get actual odds from match data
+  let odds = bestPick.cuota || 2.0;
+  const { mercado, seleccion } = bestPick;
+  
+  if (mercado === 'resultado_1x2' || mercado === 'resultado') {
+    const sel = seleccion === '1' ? '1' : seleccion === '2' ? '2' : 'X';
+    odds = matchData.cuotas?.resultado?.[sel] || odds;
+  } else if (mercado === 'total_goles' || mercado.includes('over')) {
+    const linea = bestPick.linea || 2.5;
+    if (linea === 1.5) {
+      odds = seleccion === 'over' 
+        ? (matchData.cuotas?.over15?.over || 1.3)
+        : (matchData.cuotas?.over15?.under || 3.5);
+    } else if (linea === 2.5) {
+      odds = seleccion === 'over' 
+        ? (matchData.cuotas?.over25?.over || 1.9)
+        : (matchData.cuotas?.over25?.under || 1.9);
+    } else if (linea === 3.5) {
+      odds = seleccion === 'over' 
+        ? (matchData.cuotas?.over35?.over || 3.0)
+        : (matchData.cuotas?.over35?.under || 1.4);
+    }
+  } else if (mercado === 'ambos_anotan' || mercado === 'btts') {
+    odds = seleccion === 'yes'
+      ? (matchData.cuotas?.btts?.yes || 1.75)
+      : (matchData.cuotas?.btts?.no || 1.95);
+  } else if (mercado === 'corners') {
+    odds = seleccion === 'over'
+      ? (matchData.cuotas?.corners?.over || 1.85)
+      : (matchData.cuotas?.corners?.under || 1.90);
+  }
+  
+  // Build selection name
+  const [home, away] = matchData.partido.split(' vs ');
+  let selectionName = '';
+  
+  if (mercado === 'resultado_1x2' || mercado === 'resultado') {
+    selectionName = seleccion === '1' ? home : seleccion === '2' ? away : 'Empate';
+  } else if (mercado === 'total_goles' || mercado.includes('over')) {
+    const linea = bestPick.linea || 2.5;
+    selectionName = `${seleccion === 'over' ? 'Over' : 'Under'} ${linea}`;
+  } else if (mercado === 'ambos_anotan' || mercado === 'btts') {
+    selectionName = seleccion === 'yes' ? 'Sí' : 'No';
+  } else if (mercado === 'corners') {
+    const linea = matchData.cuotas?.corners?.linea || 9.5;
+    selectionName = `${seleccion === 'over' ? 'Over' : 'Under'} ${linea} corners`;
+  } else {
+    selectionName = `${seleccion}`;
+  }
+  
+  // Get analysis from appropriate market
+  let analysis = '';
+  if (mercado === 'resultado_1x2' && llmResult.mercados?.resultado_1x2?.analisis) {
+    analysis = llmResult.mercados.resultado_1x2.analisis;
+  } else if (mercado === 'ambos_anotan' && llmResult.mercados?.ambos_anotan?.analisis) {
+    analysis = llmResult.mercados.ambos_anotan.analisis;
+  } else if (mercado === 'total_goles' && llmResult.mercados?.total_goles?.analisis) {
+    analysis = llmResult.mercados.total_goles.analisis;
+  } else if (mercado === 'corners' && llmResult.mercados?.corners?.analisis) {
+    analysis = llmResult.mercados.corners.analisis;
+  } else if (llmResult.mercados?.proyeccion_final?.resumen) {
+    analysis = llmResult.mercados.proyeccion_final.resumen;
+  }
+  
+  return {
+    valid: true,
+    pick: {
+      fixture_id: matchData._meta.fixture_id,
+      league: matchData.liga,
+      home_team: home,
+      away_team: away,
+      kickoff: matchData.fecha_utc,
+      market: mercado.toUpperCase(),
+      selection: selectionName,
+      odds,
+      estimated_prob: pickWithValue?.prob_estimada || (1 / odds),
+      implied_prob: matchData.probabilidades_implicitas_normalizadas?.victoria_local || 0.33,
+      edge_percent: Math.round(evAjustado * 100),
+      confidence: Math.round(confidence * 10),
+      quality_tier: qualityTier,
+      analysis,
+      risk_factors: llmResult.risk_factors || [],
+      supporting_factors: llmResult.supporting_factors || [],
+      ajustes_aplicados: llmResult.ajustes_aplicados || [],
+      source: 'daily_auto',
+      sport: 'football'
+    }
+  };
+}
+
+// =====================================================
 // SELECT BEST PICKS
 // =====================================================
 
@@ -803,99 +1110,39 @@ function selectBestPicks(llmResults, matchDataObjects) {
     const result = llmResults[i];
     const match = matchDataObjects[i];
     
-    if (!result?.pick?.value_bet) {
+    if (!result) {
       logDiscarded(
         { local: match.partido.split(' vs ')[0], visitante: match.partido.split(' vs ')[1] },
         match._meta.league_id,
         DISCARD_REASONS.NO_VALUE,
-        { confidence: result?.confidence, ev: result?.pick?.expected_value }
+        { reason: 'llm_no_response' }
       );
       continue;
     }
     
-    if (result.confidence < CONFIG.MIN_CONFIDENCE) {
+    const processed = processLLMResults(result, match);
+    
+    if (!processed) {
       logDiscarded(
         { local: match.partido.split(' vs ')[0], visitante: match.partido.split(' vs ')[1] },
         match._meta.league_id,
-        DISCARD_REASONS.LOW_CONFIDENCE,
-        { confidence: result.confidence }
+        DISCARD_REASONS.NO_VALUE,
+        { data_quality: result.data_quality }
       );
       continue;
     }
     
-    if (result.pick.expected_value < CONFIG.MIN_EV) {
+    if (!processed.valid) {
       logDiscarded(
         { local: match.partido.split(' vs ')[0], visitante: match.partido.split(' vs ')[1] },
         match._meta.league_id,
-        DISCARD_REASONS.LOW_EV,
-        { ev: result.pick.expected_value }
+        processed.reason === 'low_confidence' ? DISCARD_REASONS.LOW_CONFIDENCE : DISCARD_REASONS.LOW_EV,
+        { confidence: processed.confidence, ev: processed.ev }
       );
       continue;
     }
     
-    // Determine quality tier
-    let qualityTier = 'B';
-    if (result.pick.expected_value >= 0.08 && result.confidence >= 0.80) {
-      qualityTier = 'A_PLUS';
-    }
-    
-    // Get odds
-    let odds = 2.0;
-    const { market, selection } = result.pick;
-    
-    if (market === 'resultado') {
-      odds = match.cuotas?.resultado?.[selection] || 2.0;
-    } else if (market === 'over25') {
-      odds = selection === 'over' 
-        ? (match.cuotas?.over25?.over || 1.9)
-        : (match.cuotas?.over25?.under || 1.9);
-    } else if (market === 'over15') {
-      odds = selection === 'over'
-        ? (match.cuotas?.over15?.over || 1.3)
-        : (match.cuotas?.over15?.under || 3.5);
-    } else if (market === 'over35') {
-      odds = selection === 'over'
-        ? (match.cuotas?.over35?.over || 3.0)
-        : (match.cuotas?.over35?.under || 1.4);
-    } else if (market === 'btts') {
-      odds = selection === 'yes'
-        ? (match.cuotas?.btts?.yes || 1.75)
-        : (match.cuotas?.btts?.no || 1.95);
-    } else if (market === 'corners') {
-      odds = selection === 'over'
-        ? (match.cuotas?.corners?.over || 1.85)
-        : (match.cuotas?.corners?.under || 1.90);
-    }
-    
-    // Selection name
-    const [home, away] = match.partido.split(' vs ');
-    const selectionName = market === 'resultado'
-      ? (selection === '1' ? home : selection === '2' ? away : 'Empate')
-      : market.startsWith('over')
-        ? `${selection === 'over' ? 'Over' : 'Under'} ${market.replace('over', '')}`
-        : market === 'btts'
-          ? (selection === 'yes' ? 'Sí' : 'No')
-          : `${selection === 'over' ? 'Over' : 'Under'} ${match.cuotas?.corners?.linea || 9.5} corners`;
-    
-    validPicks.push({
-      fixture_id: match._meta.fixture_id,
-      league: match.liga,
-      home_team: home,
-      away_team: away,
-      kickoff: match.fecha_utc,
-      market: market === 'resultado' ? '1X2' : market.toUpperCase(),
-      selection: selectionName,
-      odds,
-      estimated_prob: result.pick.estimated_prob,
-      implied_prob: match.probabilidades_implicitas_normalizadas?.victoria_local || 0.33,
-      edge_percent: Math.round(result.pick.expected_value * 100),
-      confidence: Math.round(result.confidence * 10),
-      quality_tier: qualityTier,
-      analysis: result.analysis,
-      risk_factors: result.risk_factors || [],
-      source: 'daily_auto',
-      sport: 'football'
-    });
+    validPicks.push(processed.pick);
   }
   
   // Sort by confidence * edge
@@ -938,6 +1185,7 @@ async function savePicks(picks) {
         quality_tier: p.quality_tier,
         analysis_text: p.analysis,
         risk_factors: p.risk_factors,
+        supporting_factors: p.supporting_factors,
         is_official: true,
         status: 'pending',
         source: 'daily_auto'
@@ -1002,17 +1250,17 @@ export default async function handler(req, res) {
       
       const matchData = await buildMatchDataObject(fixture, season);
       
-      // Validate
+      // Validate: 2+ missing = discard
       const validation = validateMatchData(matchData);
       if (validation.valid) {
         matchDataObjects.push(matchData);
-        console.log(`   ✅ ${matchData.partido} (${validation.score}/6)`);
+        console.log(`   ✅ ${matchData.partido} (missing: ${validation.missing.length})`);
       } else {
         logDiscarded(
           { local: fixture.home_name, visitante: fixture.away_name },
           fixture.league_id,
           DISCARD_REASONS.INSUFFICIENT_DATA,
-          { validation_score: validation.score, issues: validation.issues.join(',') }
+          { missing: validation.missing.join(','), count: validation.criticalMissingCount }
         );
       }
     }
