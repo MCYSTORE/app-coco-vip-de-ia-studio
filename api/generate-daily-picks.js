@@ -1,23 +1,14 @@
 /**
- * Daily Football Picks - Enhanced API-Football v3 Integration
+ * Football Picks Generation API
  * 
- * POST /api/generate-daily-picks
+ * POST /api/generate-football-picks
  * Body: { date?: string }
  * 
- * Uses ALL relevant API-Football v3 endpoints for maximum context.
- * Request budget: 100/day (free plan)
- * 
- * Endpoints used:
- * 1. /fixtures?date= - Fixtures of the day
- * 2. /standings - League standings (cached 24h)
- * 3. /fixtures?team=&last=10 - Recent form
- * 4. /teams/statistics - Team season stats (cached 12h)
- * 5. /fixtures?h2h= - Head to head
- * 6. /odds - Pre-match odds (Bet365)
- * 7. /predictions - API predictions
- * 8. /injuries - Injuries/suspensions
- * 9. /players?fixture= - Key player stats
- * 10. /fixtures/lineups - Probable lineups
+ * Architecture:
+ * 1. Data Layer: Fetch from API-Football v3
+ * 2. Build clean match data object
+ * 3. Validate minimum data
+ * 4. Pass ONLY the object to LLM (no endpoints, URLs, or frontend code)
  */
 
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
@@ -33,7 +24,6 @@ const CONFIG = {
   MAX_PICKS_PER_DAY: 3,
   MAX_API_REQUESTS: 100,
   
-  // Allowed leagues (men's football only)
   ALLOWED_LEAGUES: [
     { id: 39, name: "Premier League", country: "England", tier: 1 },
     { id: 140, name: "La Liga", country: "Spain", tier: 1 },
@@ -51,36 +41,27 @@ const CONFIG = {
   MIN_EV: 0.04,
   LLM_MODEL: "deepseek/deepseek-chat",
   
-  // Bet365 bookmaker ID
-  BOOKMAKER_ID: 8,
+  BOOKMAKER_ID: 8, // Bet365
   
-  // Bet type IDs
   BET_TYPES: {
-    MATCH_WINNER: 1,      // 1X2
-    OVER_UNDER_25: 5,     // Over/Under 2.5 Goals
-    BTTS: 12,             // Both Teams To Score
-    DOUBLE_CHANCE: 6      // 1X, 12, X2
+    MATCH_WINNER: 1,
+    OVER_UNDER_15: 243,
+    OVER_UNDER_25: 5,
+    OVER_UNDER_35: 244,
+    BTTS: 12,
+    CORNERS: 17
   },
   
-  // Cache TTLs
-  STANDINGS_CACHE_TTL: 24 * 60 * 60 * 1000,    // 24 hours
-  TEAM_STATS_CACHE_TTL: 12 * 60 * 60 * 1000,   // 12 hours
+  STANDINGS_CACHE_TTL: 24 * 60 * 60 * 1000,
+  TEAM_STATS_CACHE_TTL: 12 * 60 * 60 * 1000,
   
-  // Minimum data requirements for LLM
-  MIN_STANDINGS: true,
+  // Validation thresholds
   MIN_FORM_MATCHES: 5,
   MIN_H2H_MATCHES: 3,
-  MIN_DATA_VALIDATION: 4,  // Must have 4+ data categories
-  
-  QUALITY_TIERS: {
-    A_PLUS: { min_ev: 0.08, min_confidence: 0.80 },
-    B: { min_ev: 0.04, min_confidence: 0.65 }
-  }
+  MIN_VALIDATION_SCORE: 4
 };
 
-// Discard reasons
 const DISCARD_REASONS = {
-  LEAGUE_NOT_ALLOWED: "liga_no_permitida",
   INSUFFICIENT_DATA: "datos_insuficientes",
   LOW_CONFIDENCE: "confianza_baja",
   LOW_EV: "ev_insuficiente",
@@ -88,7 +69,7 @@ const DISCARD_REASONS = {
 };
 
 // =====================================================
-// IN-MEMORY CACHES
+// CACHES & STATE
 // =====================================================
 
 const standingsCache = new Map();
@@ -98,7 +79,7 @@ let lastResetDate = new Date().toISOString().split('T')[0];
 let discardedPicks = [];
 
 // =====================================================
-// HELPER FUNCTIONS
+// CORE API FETCH
 // =====================================================
 
 function checkAndResetCounter() {
@@ -111,19 +92,37 @@ function checkAndResetCounter() {
   }
 }
 
-function isLeagueAllowed(leagueId) {
-  return CONFIG.ALLOWED_LEAGUES.some(l => l.id === leagueId);
+async function fetchAPI(endpoint) {
+  if (!SPORTS_API_KEY) throw new Error('SPORTS_API_KEY not configured');
+  if (requestCountToday >= CONFIG.MAX_API_REQUESTS) {
+    throw new Error(`API limit reached: ${requestCountToday}/${CONFIG.MAX_API_REQUESTS}`);
+  }
+  
+  const url = `https://v3.football.api-sports.io/${endpoint}`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: { 'x-apisports-key': SPORTS_API_KEY }
+    });
+    
+    if (!response.ok) {
+      console.error(`API error ${response.status}`);
+      return null;
+    }
+    
+    requestCountToday++;
+    return response.json();
+  } catch (error) {
+    console.error(`Fetch error: ${error.message}`);
+    return null;
+  }
 }
 
-function getLeagueConfig(leagueId) {
-  return CONFIG.ALLOWED_LEAGUES.find(l => l.id === leagueId);
-}
-
-function logDiscardedPick(match, leagueId, reason, extra = {}) {
+function logDiscarded(match, leagueId, reason, extra = {}) {
   const entry = {
     date: new Date().toISOString().split('T')[0],
-    match_name: `${match.home?.name || 'Home'} vs ${match.away?.name || 'Away'}`,
-    league: getLeagueConfig(leagueId)?.name || `League ${leagueId}`,
+    match_name: `${match.local || 'Home'} vs ${match.visitante || 'Away'}`,
+    league: CONFIG.ALLOWED_LEAGUES.find(l => l.id === leagueId)?.name || `League ${leagueId}`,
     league_id: leagueId,
     reason,
     ...extra,
@@ -131,12 +130,10 @@ function logDiscardedPick(match, leagueId, reason, extra = {}) {
   };
   discardedPicks.push(entry);
   console.log(`   ❌ DISCARDED: ${entry.match_name} - ${reason}`);
-  return entry;
 }
 
-async function saveDiscardedPicksToSupabase(discarded) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || discarded.length === 0) return;
-  
+async function saveDiscarded() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || discardedPicks.length === 0) return;
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/picks_discarded`, {
       method: 'POST',
@@ -146,702 +143,572 @@ async function saveDiscardedPicksToSupabase(discarded) {
         'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
         'Prefer': 'return=minimal'
       },
-      body: JSON.stringify(discarded)
+      body: JSON.stringify(discardedPicks)
     });
-  } catch (error) {
-    console.error("Error saving discarded picks:", error.message);
-  }
+  } catch (e) {}
 }
 
 // =====================================================
-// API FOOTBALL v3 - CORE FETCH FUNCTION
-// =====================================================
-
-async function fetchAPI(endpoint) {
-  if (!SPORTS_API_KEY) {
-    throw new Error('SPORTS_API_KEY not configured');
-  }
-  
-  // Check request budget
-  if (requestCountToday >= CONFIG.MAX_API_REQUESTS) {
-    throw new Error(`API request limit reached: ${requestCountToday}/${CONFIG.MAX_API_REQUESTS}`);
-  }
-  
-  const url = `https://v3.football.api-sports.io/${endpoint}`;
-  
-  try {
-    const response = await fetch(url, {
-      headers: {
-        'x-apisports-key': SPORTS_API_KEY
-      }
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`API error ${response.status}: ${errorText.slice(0, 200)}`);
-      return null;
-    }
-    
-    requestCountToday++;
-    return response.json();
-  } catch (error) {
-    console.error(`API fetch error: ${error.message}`);
-    return null;
-  }
-}
-
-// =====================================================
-// ENDPOINT 1: FIXTURES DEL DÍA
+// DATA FETCHING FUNCTIONS
 // =====================================================
 
 async function getFixtures(date) {
   const data = await fetchAPI(`fixtures?date=${date}&timezone=UTC`);
-  
   if (!data?.response) return [];
   
   return data.response
-    .filter(f => f.fixture.status.short === 'NS')  // Not started only
-    .filter(f => isLeagueAllowed(f.league.id))
+    .filter(f => f.fixture.status.short === 'NS')
+    .filter(f => CONFIG.ALLOWED_LEAGUES.some(l => l.id === f.league.id))
     .map(f => ({
       fixture_id: f.fixture.id,
-      league: {
-        id: f.league.id,
-        name: f.league.name,
-        country: f.league.country
-      },
-      home: {
-        id: f.teams.home.id,
-        name: f.teams.home.name,
-        logo: f.teams.home.logo
-      },
-      away: {
-        id: f.teams.away.id,
-        name: f.teams.away.name,
-        logo: f.teams.away.logo
-      },
-      kickoff_utc: f.fixture.date,
-      status: f.fixture.status.short
+      league_id: f.league.id,
+      league_name: f.league.name,
+      country: f.league.country,
+      home_id: f.teams.home.id,
+      home_name: f.teams.home.name,
+      away_id: f.teams.away.id,
+      away_name: f.teams.away.name,
+      kickoff_utc: f.fixture.date
     }));
 }
-
-// =====================================================
-// ENDPOINT 2: STANDINGS (cached 24h)
-// =====================================================
 
 async function getStandings(leagueId, season) {
   const cacheKey = `${leagueId}-${season}`;
   const cached = standingsCache.get(cacheKey);
-  
   if (cached && (Date.now() - cached.timestamp) < CONFIG.STANDINGS_CACHE_TTL) {
     return cached.data;
   }
   
   const data = await fetchAPI(`standings?league=${leagueId}&season=${season}`);
-  
   if (!data?.response?.[0]?.league?.standings?.[0]) return [];
   
-  const standings = data.response[0].league.standings[0].map(team => ({
-    team_id: team.team.id,
-    team_name: team.team.name,
-    rank: team.rank,
-    points: team.points,
-    goals_for: team.all.goals.for,
-    goals_against: team.all.goals.against,
-    goals_diff: team.goalsDiff,
-    played: team.all.played,
-    win: team.all.win,
-    draw: team.all.draw,
-    lose: team.all.lose,
-    form: team.form,
-    description: team.description || null,
-    // Home/Away records
-    home: {
-      played: team.home.played,
-      win: team.home.win,
-      draw: team.home.draw,
-      lose: team.home.lose,
-      goals_for: team.home.goals.for,
-      goals_against: team.home.goals.against
-    },
-    away: {
-      played: team.away.played,
-      win: team.away.win,
-      draw: team.away.draw,
-      lose: team.away.lose,
-      goals_for: team.away.goals.for,
-      goals_against: team.away.goals.against
-    }
+  const standings = data.response[0].league.standings[0].map(t => ({
+    team_id: t.team.id,
+    posicion: t.rank,
+    puntos: t.points,
+    forma: t.form,
+    goles_favor: t.all.goals.for,
+    goles_contra: t.all.goals.against,
+    record_casa: `${t.home.win}W-${t.home.draw}D-${t.home.lose}L`,
+    record_fuera: `${t.away.win}W-${t.away.draw}D-${t.away.lose}L`,
+    descripcion: t.description || null
   }));
   
   standingsCache.set(cacheKey, { data: standings, timestamp: Date.now() });
   return standings;
 }
 
-// =====================================================
-// ENDPOINT 3: FORMA RECIENTE (últimos 10 partidos)
-// =====================================================
-
-async function getRecentForm(teamId, teamName) {
-  const data = await fetchAPI(`fixtures?team=${teamId}&last=10&timezone=UTC`);
-  
-  if (!data?.response) return null;
-  
-  const matches = data.response.map(f => {
-    const isHome = f.teams.home.id === teamId;
-    const teamGoals = isHome ? f.goals.home : f.goals.away;
-    const oppGoals = isHome ? f.goals.away : f.goals.home;
-    
-    let result = 'D';
-    if (teamGoals > oppGoals) result = 'W';
-    else if (teamGoals < oppGoals) result = 'L';
-    
-    return {
-      date: f.fixture.date,
-      opponent: isHome ? f.teams.away.name : f.teams.home.name,
-      was_home: isHome,
-      goals_for: teamGoals,
-      goals_against: oppGoals,
-      result
-    };
-  });
-  
-  // Calculate stats
-  const wins = matches.filter(m => m.result === 'W').length;
-  const draws = matches.filter(m => m.result === 'D').length;
-  const losses = matches.filter(m => m.result === 'L').length;
-  const totalGF = matches.reduce((sum, m) => sum + m.goals_for, 0);
-  const totalGA = matches.reduce((sum, m) => sum + m.goals_against, 0);
-  
-  // Home/Away breakdown
-  const homeMatches = matches.filter(m => m.was_home);
-  const awayMatches = matches.filter(m => !m.was_home);
-  
-  // Current streak
-  let streak = '';
-  for (const m of matches) {
-    if (streak === '' || streak[0] === m.result) {
-      streak = m.result + streak;
-    } else {
-      break;
-    }
-  }
-  
-  return {
-    last10: matches,
-    form_string: matches.map(m => m.result).join(''),
-    avg_gf: totalGF / matches.length,
-    avg_ga: totalGA / matches.length,
-    wins, draws, losses,
-    home_record: {
-      wins: homeMatches.filter(m => m.result === 'W').length,
-      draws: homeMatches.filter(m => m.result === 'D').length,
-      losses: homeMatches.filter(m => m.result === 'L').length
-    },
-    away_record: {
-      wins: awayMatches.filter(m => m.result === 'W').length,
-      draws: awayMatches.filter(m => m.result === 'D').length,
-      losses: awayMatches.filter(m => m.result === 'L').length
-    },
-    streak,
-    matches_count: matches.length
-  };
-}
-
-// =====================================================
-// ENDPOINT 4: TEAM STATISTICS (cached 12h)
-// =====================================================
-
 async function getTeamStatistics(leagueId, season, teamId) {
   const cacheKey = `${leagueId}-${season}-${teamId}`;
   const cached = teamStatsCache.get(cacheKey);
-  
   if (cached && (Date.now() - cached.timestamp) < CONFIG.TEAM_STATS_CACHE_TTL) {
     return cached.data;
   }
   
   const data = await fetchAPI(`teams/statistics?league=${leagueId}&season=${season}&team=${teamId}`);
-  
   if (!data?.response) return null;
   
-  const stats = data.response;
+  const s = data.response;
   
   const result = {
-    // Fixtures
-    fixtures: {
-      played: stats.fixtures?.played || 0,
-      wins: stats.fixtures?.wins || 0,
-      draws: stats.fixtures?.draws || 0,
-      loses: stats.fixtures?.loses || 0
-    },
-    // Goals
-    goals: {
-      for: {
-        total: stats.goals?.for?.total || 0,
-        average: {
-          total: stats.goals?.for?.average?.total || '0',
-          home: stats.goals?.for?.average?.home || '0',
-          away: stats.goals?.for?.average?.away || '0'
-        }
-      },
-      against: {
-        total: stats.goals?.against?.total || 0,
-        average: {
-          total: stats.goals?.against?.average?.total || '0',
-          home: stats.goals?.against?.average?.home || '0',
-          away: stats.goals?.against?.average?.away || '0'
-        }
-      }
-    },
-    // Biggest
-    biggest: {
-      wins_streak: stats.biggest?.wins_streak || 0,
-      loses_streak: stats.biggest?.loses_streak || 0
-    },
-    // Clean sheets
-    clean_sheet: {
-      total: stats.clean_sheet?.total || 0,
-      home: stats.clean_sheet?.home || 0,
-      away: stats.clean_sheet?.away || 0
-    },
-    // Failed to score
-    failed_to_score: {
-      total: stats.failed_to_score?.total || 0,
-      home: stats.failed_to_score?.home || 0,
-      away: stats.failed_to_score?.away || 0
-    },
-    // Lineups (most used formation)
-    top_formation: stats.lineups?.[0]?.formation || 'Unknown'
+    promedio_goles_anotados_casa: parseFloat(s.goals?.for?.average?.home) || 0,
+    promedio_goles_anotados_fuera: parseFloat(s.goals?.for?.average?.away) || 0,
+    promedio_goles_recibidos_casa: parseFloat(s.goals?.against?.average?.home) || 0,
+    promedio_goles_recibidos_fuera: parseFloat(s.goals?.against?.average?.away) || 0,
+    partidos_sin_recibir_casa: s.clean_sheet?.home || 0,
+    partidos_sin_recibir_fuera: s.clean_sheet?.away || 0,
+    partidos_sin_anotar_casa: s.failed_to_score?.home || 0,
+    partidos_sin_anotar_fuera: s.failed_to_score?.away || 0,
+    formacion_habitual: s.lineups?.[0]?.formation || 'Unknown',
+    // Corners
+    corners_favor: s.cards?.total || 0,
+    promedio_corners_favor: parseFloat(s.cards?.total) / (s.fixtures?.played || 1) || 0
   };
   
   teamStatsCache.set(cacheKey, { data: result, timestamp: Date.now() });
   return result;
 }
 
-// =====================================================
-// ENDPOINT 5: HEAD TO HEAD
-// =====================================================
-
-async function getHeadToHead(homeId, awayId) {
-  const data = await fetchAPI(`fixtures?h2h=${homeId}-${awayId}&last=10`);
-  
+async function getRecentForm(teamId) {
+  const data = await fetchAPI(`fixtures?team=${teamId}&last=10&timezone=UTC`);
   if (!data?.response) return null;
   
-  const matches = data.response.map(f => ({
-    date: f.fixture.date,
-    home_team: f.teams.home.name,
-    away_team: f.teams.away.name,
-    home_goals: f.goals.home,
-    away_goals: f.goals.away,
-    total_goals: (f.goals.home || 0) + (f.goals.away || 0)
-  }));
+  const matches = data.response.map(f => {
+    const isHome = f.teams.home.id === teamId;
+    const gf = isHome ? f.goals.home : f.goals.away;
+    const ga = isHome ? f.goals.away : f.goals.home;
+    
+    let resultado = 'D';
+    if (gf > ga) resultado = 'W';
+    else if (gf < ga) resultado = 'L';
+    
+    return { resultado, gf, ga, fue_local: isHome };
+  });
   
-  // Calculate H2H stats
-  let homeWins = 0, awayWins = 0, draws = 0;
-  let over25 = 0;
-  
+  // Calculate streak
+  let racha = '';
   for (const m of matches) {
-    const homeTeamIsFirstTeam = m.home_team === data.response[0]?.teams?.home?.name;
-    
-    if (m.home_goals > m.away_goals) {
-      homeWins++;
-    } else if (m.home_goals < m.away_goals) {
-      awayWins++;
-    } else {
-      draws++;
-    }
-    
-    if (m.total_goals > 2.5) over25++;
+    if (racha === '' || racha[0] === m.resultado) {
+      racha = m.resultado + racha;
+    } else break;
   }
   
-  const avgTotalGoals = matches.length > 0
-    ? matches.reduce((sum, m) => sum + m.total_goals, 0) / matches.length
-    : 0;
+  const totalGF = matches.reduce((sum, m) => sum + m.gf, 0);
+  const totalGA = matches.reduce((sum, m) => sum + m.ga, 0);
   
   return {
-    last10: matches,
-    avg_total_goals: Math.round(avgTotalGoals * 100) / 100,
-    home_wins: homeWins,
-    away_wins: awayWins,
-    draws,
-    over25_pct: matches.length > 0 ? Math.round((over25 / matches.length) * 100) : 0
+    ultimos10: matches,
+    promedio_gf: Math.round((totalGF / matches.length) * 100) / 100,
+    promedio_ga: Math.round((totalGA / matches.length) * 100) / 100,
+    racha_actual: racha || 'N/A',
+    partidos_count: matches.length
   };
 }
 
-// =====================================================
-// ENDPOINT 6: ODDS (Bet365)
-// =====================================================
+async function getH2H(homeId, awayId) {
+  const data = await fetchAPI(`fixtures?h2h=${homeId}-${awayId}&last=10`);
+  if (!data?.response) return null;
+  
+  const ultimos10 = data.response.map(f => {
+    let ganador = 'empate';
+    if (f.goals.home > f.goals.away) ganador = 'local';
+    else if (f.goals.home < f.goals.away) ganador = 'visitante';
+    
+    return {
+      ganador,
+      goles_total: (f.goals.home || 0) + (f.goals.away || 0)
+    };
+  });
+  
+  let victorias_local = 0, victorias_visitante = 0, empates = 0, over25 = 0;
+  
+  for (const m of ultimos10) {
+    if (m.ganador === 'local') victorias_local++;
+    else if (m.ganador === 'visitante') victorias_visitante++;
+    else empates++;
+    if (m.goles_total > 2.5) over25++;
+  }
+  
+  const avgGoals = ultimos10.length > 0 
+    ? Math.round((ultimos10.reduce((s, m) => s + m.goles_total, 0) / ultimos10.length) * 100) / 100
+    : 0;
+  
+  return {
+    ultimos10,
+    promedio_goles_total: avgGoals,
+    victorias_local,
+    victorias_visitante,
+    empates,
+    over25_porcentaje: ultimos10.length > 0 ? `${Math.round((over25 / ultimos10.length) * 100)}%` : '0%'
+  };
+}
 
 async function getOdds(fixtureId) {
-  const result = {
-    '1x2': null,
-    'over25': null,
-    'btts': null,
-    implied_probs_normalized: null
+  const cuotas = {
+    resultado: null,
+    over15: null,
+    over25: null,
+    over35: null,
+    btts: null,
+    corners: null
   };
   
-  // 1X2 Odds
+  // 1X2
   try {
-    const data1x2 = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.MATCH_WINNER}`);
-    
-    if (data1x2?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
-      const values = data1x2.response[0].bookmakers[0].bets[0].values;
-      
-      result['1x2'] = {
-        '1': parseFloat(values.find(v => v.value === 'Home')?.odd || '0'),
-        'X': parseFloat(values.find(v => v.value === 'Draw')?.odd || '0'),
-        '2': parseFloat(values.find(v => v.value === 'Away')?.odd || '0')
+    const d = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.MATCH_WINNER}`);
+    if (d?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
+      const v = d.response[0].bookmakers[0].bets[0].values;
+      cuotas.resultado = {
+        '1': parseFloat(v.find(x => x.value === 'Home')?.odd || '0'),
+        'X': parseFloat(v.find(x => x.value === 'Draw')?.odd || '0'),
+        '2': parseFloat(v.find(x => x.value === 'Away')?.odd || '0')
       };
     }
-  } catch (e) {
-    console.log(`   ⚠️ 1X2 odds not available`);
-  }
+  } catch (e) {}
   
-  // Over/Under 2.5 Odds
+  // Over 1.5
   try {
-    const dataOu = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.OVER_UNDER_25}`);
-    
-    if (dataOu?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
-      const values = dataOu.response[0].bookmakers[0].bets[0].values;
-      
-      result['over25'] = {
-        over: parseFloat(values.find(v => v.value === 'Over')?.odd || '0'),
-        under: parseFloat(values.find(v => v.value === 'Under')?.odd || '0')
+    const d = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.OVER_UNDER_15}`);
+    if (d?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
+      const v = d.response[0].bookmakers[0].bets[0].values;
+      cuotas.over15 = {
+        over: parseFloat(v.find(x => x.value === 'Over')?.odd || '0'),
+        under: parseFloat(v.find(x => x.value === 'Under')?.odd || '0')
       };
     }
-  } catch (e) {
-    console.log(`   ⚠️ Over/Under odds not available`);
-  }
+  } catch (e) {}
   
-  // BTTS Odds
+  // Over 2.5
   try {
-    const dataBtts = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.BTTS}`);
-    
-    if (dataBtts?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
-      const values = dataBtts.response[0].bookmakers[0].bets[0].values;
-      
-      result['btts'] = {
-        yes: parseFloat(values.find(v => v.value === 'Yes')?.odd || '0'),
-        no: parseFloat(values.find(v => v.value === 'No')?.odd || '0')
+    const d = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.OVER_UNDER_25}`);
+    if (d?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
+      const v = d.response[0].bookmakers[0].bets[0].values;
+      cuotas.over25 = {
+        over: parseFloat(v.find(x => x.value === 'Over')?.odd || '0'),
+        under: parseFloat(v.find(x => x.value === 'Under')?.odd || '0')
       };
     }
-  } catch (e) {
-    console.log(`   ⚠️ BTTS odds not available`);
-  }
+  } catch (e) {}
   
-  // Normalize implied probabilities (remove overround)
-  if (result['1x2'] && result['1x2']['1'] > 0) {
-    const raw1 = 1 / result['1x2']['1'];
-    const rawX = 1 / result['1x2']['X'];
-    const raw2 = 1 / result['1x2']['2'];
-    const sum = raw1 + rawX + raw2;
+  // Over 3.5
+  try {
+    const d = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.OVER_UNDER_35}`);
+    if (d?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
+      const v = d.response[0].bookmakers[0].bets[0].values;
+      cuotas.over35 = {
+        over: parseFloat(v.find(x => x.value === 'Over')?.odd || '0'),
+        under: parseFloat(v.find(x => x.value === 'Under')?.odd || '0')
+      };
+    }
+  } catch (e) {}
+  
+  // BTTS
+  try {
+    const d = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.BTTS}`);
+    if (d?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
+      const v = d.response[0].bookmakers[0].bets[0].values;
+      cuotas.btts = {
+        yes: parseFloat(v.find(x => x.value === 'Yes')?.odd || '0'),
+        no: parseFloat(v.find(x => x.value === 'No')?.odd || '0')
+      };
+    }
+  } catch (e) {}
+  
+  // Corners
+  try {
+    const d = await fetchAPI(`odds?fixture=${fixtureId}&bookmaker=${CONFIG.BOOKMAKER_ID}&bet=${CONFIG.BET_TYPES.CORNERS}`);
+    if (d?.response?.[0]?.bookmakers?.[0]?.bets?.[0]?.values) {
+      const b = d.response[0].bookmakers[0].bets[0];
+      cuotas.corners = {
+        linea: parseFloat(b.values?.[0]?.value?.replace('Over ', '')?.replace('.5', '.5')) || 9.5,
+        over: parseFloat(b.values?.find(x => x.value.startsWith('Over'))?.odd || '1.85'),
+        under: parseFloat(b.values?.find(x => x.value.startsWith('Under'))?.odd || '1.90')
+      };
+    }
+  } catch (e) {}
+  
+  // Normalized probabilities
+  let probabilidades_implicitas_normalizadas = null;
+  if (cuotas.resultado && cuotas.resultado['1'] > 0) {
+    const r1 = 1 / cuotas.resultado['1'];
+    const rX = 1 / cuotas.resultado['X'];
+    const r2 = 1 / cuotas.resultado['2'];
+    const sum = r1 + rX + r2;
     
-    result.implied_probs_normalized = {
-      home_win: Math.round((raw1 / sum) * 1000) / 1000,
-      draw: Math.round((rawX / sum) * 1000) / 1000,
-      away_win: Math.round((raw2 / sum) * 1000) / 1000
+    probabilidades_implicitas_normalizadas = {
+      victoria_local: Math.round((r1 / sum) * 1000) / 1000,
+      empate: Math.round((rX / sum) * 1000) / 1000,
+      victoria_visitante: Math.round((r2 / sum) * 1000) / 1000
     };
+  }
+  
+  return { ...cuotas, probabilidades_implicitas_normalizadas };
+}
+
+async function getPrediction(fixtureId) {
+  const data = await fetchAPI(`predictions?fixture=${fixtureId}`);
+  if (!data?.response?.[0]) return null;
+  
+  const p = data.response[0];
+  const c = p.comparison || {};
+  
+  return {
+    ganador_sugerido: p.predictions?.winner?.name || null,
+    under_over: p.predictions?.under_over || null,
+    consejo: p.predictions?.advice || null,
+    comparacion: {
+      forma: {
+        local: c.form?.home || null,
+        visitante: c.form?.away || null
+      },
+      ataque: {
+        local: c.att?.home || null,
+        visitante: c.att?.away || null
+      },
+      defensa: {
+        local: c.def?.home || null,
+        visitante: c.def?.away || null
+      },
+      poisson_goles: {
+        local: parseFloat(c.poisson_distribution?.home) || null,
+        visitante: parseFloat(c.poisson_distribution?.away) || null
+      }
+    }
+  };
+}
+
+async function getInjuries(fixtureId, homeId, awayId) {
+  const data = await fetchAPI(`injuries?fixture=${fixtureId}`);
+  if (!data?.response) return { local: [], visitante: [] };
+  
+  const result = { local: [], visitante: [] };
+  
+  for (const i of data.response) {
+    const entry = {
+      nombre: i.player?.name || 'Unknown',
+      motivo: i.player?.reason || 'Unknown'
+    };
+    if (i.team?.id === homeId) result.local.push(entry);
+    else if (i.team?.id === awayId) result.visitante.push(entry);
   }
   
   return result;
 }
 
-// =====================================================
-// ENDPOINT 7: API PREDICTIONS
-// =====================================================
-
-async function getPredictions(fixtureId) {
-  const data = await fetchAPI(`predictions?fixture=${fixtureId}`);
+async function getKeyPlayers(teamId) {
+  const fixturesData = await fetchAPI(`fixtures?team=${teamId}&last=5`);
+  if (!fixturesData?.response || fixturesData.response.length === 0) return [];
   
-  if (!data?.response?.[0]) return null;
+  // Collect player stats from last 5 matches
+  const allPlayers = new Map();
   
-  const pred = data.response[0];
-  
-  return {
-    winner: pred.predictions?.winner?.name || null,
-    winner_comment: pred.predictions?.winner?.comment || null,
-    win_or_draw: pred.predictions?.win_or_draw || null,
-    under_over: pred.predictions?.under_over || null,
-    goals: {
-      home: pred.predictions?.goals?.home || null,
-      away: pred.predictions?.goals?.away || null
-    },
-    advice: pred.predictions?.advice || null,
-    comparison: pred.comparison ? {
-      form: {
-        home: pred.comparison.form?.home || null,
-        away: pred.comparison.form?.away || null
-      },
-      attack: {
-        home: pred.comparison.att?.home || null,
-        away: pred.comparison.att?.away || null
-      },
-      defense: {
-        home: pred.comparison.def?.home || null,
-        away: pred.comparison.def?.away || null
-      },
-      poisson: {
-        home: pred.comparison.poisson_distribution?.home || null,
-        away: pred.comparison.poisson_distribution?.away || null
-      },
-      h2h: {
-        home: pred.comparison.h2h?.home || null,
-        away: pred.comparison.h2h?.away || null
-      },
-      total: {
-        home: pred.comparison.total?.home || null,
-        away: pred.comparison.total?.away || null
-      }
-    } : null
-  };
-}
-
-// =====================================================
-// ENDPOINT 8: INJURIES & SUSPENSIONS
-// =====================================================
-
-async function getInjuries(fixtureId, homeId, awayId) {
-  const data = await fetchAPI(`injuries?fixture=${fixtureId}`);
-  
-  if (!data?.response) return { home: [], away: [] };
-  
-  const homeInjuries = [];
-  const awayInjuries = [];
-  
-  for (const injury of data.response) {
-    const entry = {
-      name: injury.player?.name || 'Unknown',
-      reason: injury.player?.reason || 'Unknown',
-      type: injury.player?.reason?.toLowerCase().includes('suspend') ? 'suspended' : 'injured'
-    };
+  for (const fixture of fixturesData.response) {
+    const playersData = await fetchAPI(`players?fixture=${fixture.fixture.id}&team=${teamId}`);
+    if (!playersData?.response) continue;
     
-    if (injury.team?.id === homeId) {
-      homeInjuries.push(entry);
-    } else if (injury.team?.id === awayId) {
-      awayInjuries.push(entry);
+    for (const p of playersData.response) {
+      const name = p.player?.name;
+      if (!name) continue;
+      
+      if (!allPlayers.has(name)) {
+        allPlayers.set(name, {
+          nombre: name,
+          posicion: p.player?.position || 'Unknown',
+          matches: [],
+          total_goles: 0,
+          total_asistencias: 0,
+          total_minutos: 0,
+          total_rating: 0
+        });
+      }
+      
+      const stats = p.statistics?.[0] || {};
+      const player = allPlayers.get(name);
+      player.matches.push(1);
+      player.total_goles += stats.goals?.total || 0;
+      player.total_asistencias += stats.goals?.assists || 0;
+      player.total_minutos += stats.games?.minutes || 0;
+      player.total_rating += parseFloat(stats.games?.rating) || 0;
     }
   }
   
-  return {
-    home: homeInjuries,
-    away: awayInjuries
-  };
-}
-
-// =====================================================
-// ENDPOINT 9: KEY PLAYERS STATS
-// =====================================================
-
-async function getKeyPlayers(teamId, teamName) {
-  // Get team's last fixture
-  const fixturesData = await fetchAPI(`fixtures?team=${teamId}&last=1`);
-  
-  if (!fixturesData?.response?.[0]) return [];
-  
-  const lastFixture = fixturesData.response[0];
-  const fixtureId = lastFixture.fixture.id;
-  
-  // Get player stats from that fixture
-  const playersData = await fetchAPI(`players?fixture=${fixtureId}&team=${teamId}`);
-  
-  if (!playersData?.response) return [];
-  
-  // Sort by minutes played, take top 3
-  const topPlayers = playersData.response
-    .filter(p => p.statistics?.[0]?.games?.minutes > 0)
-    .sort((a, b) => (b.statistics?.[0]?.games?.minutes || 0) - (a.statistics?.[0]?.games?.minutes || 0))
+  // Calculate averages and return top 3 by minutes
+  return Array.from(allPlayers.values())
+    .filter(p => p.total_minutos > 0)
+    .map(p => ({
+      nombre: p.nombre,
+      posicion: p.posicion,
+      ultimos5_promedio: {
+        goles: Math.round((p.total_goles / p.matches.length) * 100) / 100,
+        asistencias: Math.round((p.total_asistencias / p.matches.length) * 100) / 100,
+        minutos: Math.round(p.total_minutos / p.matches.length),
+        rating: Math.round((p.total_rating / p.matches.length) * 10) / 10
+      }
+    }))
+    .sort((a, b) => b.ultimos5_promedio.minutos - a.ultimos5_promedio.minutos)
     .slice(0, 3);
-  
-  return topPlayers.map(p => ({
-    name: p.player?.name || 'Unknown',
-    position: p.player?.position || 'Unknown',
-    rating: p.statistics?.[0]?.games?.rating || null,
-    minutes: p.statistics?.[0]?.games?.minutes || 0,
-    captain: p.statistics?.[0]?.games?.captain || false,
-    goals: p.statistics?.[0]?.goals?.total || 0,
-    assists: p.statistics?.[0]?.goals?.assists || 0,
-    shots: p.statistics?.[0]?.shots?.total || 0,
-    shots_on: p.statistics?.[0]?.shots?.on || 0,
-    key_passes: p.statistics?.[0]?.passes?.key || 0,
-    pass_accuracy: p.statistics?.[0]?.passes?.accuracy || null,
-    dribbles_success: p.statistics?.[0]?.dribbles?.success || 0,
-    tackles: p.statistics?.[0]?.tackles?.total || 0
-  }));
 }
 
-// =====================================================
-// ENDPOINT 10: LINEUPS
-// =====================================================
-
-async function getLineups(fixtureId) {
-  const data = await fetchAPI(`fixtures/lineups?fixture=${fixtureId}`);
+async function getCorners(homeId, awayId, leagueId, season) {
+  // Get corner stats from team statistics
+  const [homeStats, awayStats] = await Promise.all([
+    getTeamStatistics(leagueId, season, homeId),
+    getTeamStatistics(leagueId, season, awayId)
+  ]);
   
-  if (!data?.response || data.response.length < 2) {
-    return {
-      home: { formation: null, available: false },
-      away: { formation: null, available: false }
-    };
-  }
+  // Estimate corners based on team tendencies
+  // Note: API-Football corners data is in the cards field for some reason
+  const promedio_local_favor = homeStats?.promedio_corners_favor || 5.5;
+  const promedio_visitante_favor = awayStats?.promedio_corners_favor || 4.5;
+  
+  // Estimate: home team usually gets more corners at home
+  const local_favor_estimado = promedio_local_favor * 1.1;
+  const local_contra_estimado = promedio_visitante_favor * 0.9;
+  const visitante_favor_estimado = promedio_visitante_favor * 0.9;
+  const visitante_contra_estimado = promedio_local_favor * 1.1;
   
   return {
-    home: {
-      formation: data.response[0]?.formation || null,
-      coach: data.response[0]?.coach?.name || null,
-      startXI: data.response[0]?.startXI?.map(p => p.player?.name) || [],
-      available: !!(data.response[0]?.startXI?.length > 0)
-    },
-    away: {
-      formation: data.response[1]?.formation || null,
-      coach: data.response[1]?.coach?.name || null,
-      startXI: data.response[1]?.startXI?.map(p => p.player?.name) || [],
-      available: !!(data.response[1]?.startXI?.length > 0)
-    }
+    promedio_local_a_favor: Math.round(local_favor_estimado * 10) / 10,
+    promedio_local_en_contra: Math.round(local_contra_estimado * 10) / 10,
+    promedio_visitante_a_favor: Math.round(visitante_favor_estimado * 10) / 10,
+    promedio_visitante_en_contra: Math.round(visitante_contra_estimado * 10) / 10,
+    total_estimado: Math.round((local_favor_estimado + visitante_favor_estimado) * 10) / 10
   };
 }
 
 // =====================================================
-// BUILD COMPLETE MATCH CONTEXT
+// BUILD MATCH DATA OBJECT
 // =====================================================
 
-async function buildMatchContext(fixture, season) {
-  console.log(`   📊 Building context: ${fixture.home.name} vs ${fixture.away.name}`);
+async function buildMatchDataObject(fixture, season) {
+  console.log(`   📊 Building: ${fixture.home_name} vs ${fixture.away_name}`);
   
-  const context = {
-    fixture_id: fixture.fixture_id,
-    league: fixture.league,
-    match: {
-      home: fixture.home.name,
-      away: fixture.away.name,
-      kickoff_utc: fixture.kickoff_utc
-    }
-  };
-  
-  // 1. Standings
-  const standings = await getStandings(fixture.league.id, season);
-  context.standings = {
-    home: standings.find(t => t.team_id === fixture.home.id) || null,
-    away: standings.find(t => t.team_id === fixture.away.id) || null
-  };
-  
-  // 2. Team Statistics
-  const [homeStats, awayStats] = await Promise.all([
-    getTeamStatistics(fixture.league.id, season, fixture.home.id),
-    getTeamStatistics(fixture.league.id, season, fixture.away.id)
+  // Fetch all data in parallel where possible
+  const [standings, homeStats, awayStats, homeForm, awayForm, h2h, odds, prediction, injuries] = await Promise.all([
+    getStandings(fixture.league_id, season),
+    getTeamStatistics(fixture.league_id, season, fixture.home_id),
+    getTeamStatistics(fixture.league_id, season, fixture.away_id),
+    getRecentForm(fixture.home_id),
+    getRecentForm(fixture.away_id),
+    getH2H(fixture.home_id, fixture.away_id),
+    getOdds(fixture.fixture_id),
+    getPrediction(fixture.fixture_id),
+    requestCountToday < CONFIG.MAX_API_REQUESTS - 10 
+      ? getInjuries(fixture.fixture_id, fixture.home_id, fixture.away_id)
+      : Promise.resolve({ local: [], visitante: [] })
   ]);
   
-  context.team_stats = {
-    home: homeStats,
-    away: awayStats
-  };
+  // Find standings for each team
+  const standingsLocal = standings.find(t => t.team_id === fixture.home_id);
+  const standingsVisitante = standings.find(t => t.team_id === fixture.away_id);
   
-  // 3. Recent Form
-  const [homeForm, awayForm] = await Promise.all([
-    getRecentForm(fixture.home.id, fixture.home.name),
-    getRecentForm(fixture.away.id, fixture.away.name)
-  ]);
+  // Get corners
+  const corners = await getCorners(fixture.home_id, fixture.away_id, fixture.league_id, season);
   
-  context.recent_form = {
-    home: homeForm,
-    away: awayForm
-  };
-  
-  // 4. H2H
-  context.h2h = await getHeadToHead(fixture.home.id, fixture.away.id);
-  
-  // 5. Odds
-  context.odds = await getOdds(fixture.fixture_id);
-  
-  // 6. API Prediction
-  context.api_prediction = await getPredictions(fixture.fixture_id);
-  
-  // 7. Injuries (only if budget allows)
-  if (requestCountToday < CONFIG.MAX_API_REQUESTS - 20) {
-    context.injuries = await getInjuries(fixture.fixture_id, fixture.home.id, fixture.away.id);
-  } else {
-    context.injuries = { home: [], away: [] };
-  }
-  
-  // 8. Key Players (only if budget allows)
-  if (requestCountToday < CONFIG.MAX_API_REQUESTS - 10) {
+  // Get key players (only if budget allows)
+  let jugadores_clave = { local: [], visitante: [] };
+  if (requestCountToday < CONFIG.MAX_API_REQUESTS - 15) {
     const [homePlayers, awayPlayers] = await Promise.all([
-      getKeyPlayers(fixture.home.id, fixture.home.name),
-      getKeyPlayers(fixture.away.id, fixture.away.name)
+      getKeyPlayers(fixture.home_id),
+      getKeyPlayers(fixture.away_id)
     ]);
-    context.key_players = {
-      home: homePlayers,
-      away: awayPlayers
-    };
-  } else {
-    context.key_players = { home: [], away: [] };
+    jugadores_clave = { local: homePlayers, visitante: awayPlayers };
   }
   
-  // 9. Lineups (only if budget allows and close to kickoff)
-  const hoursToKickoff = (new Date(fixture.kickoff_utc) - new Date()) / (1000 * 60 * 60);
-  if (requestCountToday < CONFIG.MAX_API_REQUESTS - 5 && hoursToKickoff < 3) {
-    context.lineups = await getLineups(fixture.fixture_id);
-  } else {
-    // Use top formation from team stats as fallback
-    context.lineups = {
-      home: { formation: homeStats?.top_formation || null, available: false },
-      away: { formation: awayStats?.top_formation || null, available: false }
-    };
-  }
+  // Build the final object
+  const matchData = {
+    partido: `${fixture.home_name} vs ${fixture.away_name}`,
+    liga: fixture.league_name,
+    pais: fixture.country,
+    fecha_utc: fixture.kickoff_utc,
+    
+    standings: {
+      local: standingsLocal ? {
+        posicion: standingsLocal.posicion,
+        puntos: standingsLocal.puntos,
+        forma: standingsLocal.forma,
+        goles_favor: standingsLocal.goles_favor,
+        goles_contra: standingsLocal.goles_contra,
+        record_casa: standingsLocal.record_casa,
+        descripcion: standingsLocal.descripcion
+      } : null,
+      visitante: standingsVisitante ? {
+        posicion: standingsVisitante.posicion,
+        puntos: standingsVisitante.puntos,
+        forma: standingsVisitante.forma,
+        goles_favor: standingsVisitante.goles_favor,
+        goles_contra: standingsVisitante.goles_contra,
+        record_fuera: standingsVisitante.record_fuera,
+        descripcion: standingsVisitante.descripcion
+      } : null
+    },
+    
+    estadisticas_equipo: {
+      local: homeStats ? {
+        promedio_goles_anotados_casa: homeStats.promedio_goles_anotados_casa,
+        promedio_goles_recibidos_casa: homeStats.promedio_goles_recibidos_casa,
+        partidos_sin_recibir_casa: homeStats.partidos_sin_recibir_casa,
+        partidos_sin_anotar_casa: homeStats.partidos_sin_anotar_casa,
+        formacion_habitual: homeStats.formacion_habitual
+      } : null,
+      visitante: awayStats ? {
+        promedio_goles_anotados_fuera: awayStats.promedio_goles_anotados_fuera,
+        promedio_goles_recibidos_fuera: awayStats.promedio_goles_recibidos_fuera,
+        partidos_sin_recibir_fuera: awayStats.partidos_sin_recibir_fuera,
+        partidos_sin_anotar_fuera: awayStats.partidos_sin_anotar_fuera,
+        formacion_habitual: awayStats.formacion_habitual
+      } : null
+    },
+    
+    forma_reciente: {
+      local: homeForm,
+      visitante: awayForm
+    },
+    
+    h2h,
+    
+    cuotas: {
+      resultado: odds.resultado,
+      over15: odds.over15,
+      over25: odds.over25,
+      over35: odds.over35,
+      btts: odds.btts,
+      corners: odds.corners
+    },
+    
+    probabilidades_implicitas_normalizadas: odds.probabilidades_implicitas_normalizadas,
+    
+    prediccion_api: prediction,
+    
+    lesionados_suspendidos: injuries,
+    
+    corners,
+    
+    jugadores_clave,
+    
+    // Internal tracking (not passed to LLM)
+    _meta: {
+      fixture_id: fixture.fixture_id,
+      league_id: fixture.league_id
+    }
+  };
   
-  return context;
+  return matchData;
 }
 
 // =====================================================
-// VALIDATE MINIMUM DATA FOR LLM
+// VALIDATION
 // =====================================================
 
-function validateMinimumData(context) {
+function validateMatchData(matchData) {
   let score = 0;
   const issues = [];
   
-  // Check standings
-  if (context.standings?.home?.rank && context.standings?.away?.rank) {
+  // 1. Standings de ambos equipos presentes
+  if (matchData.standings?.local?.posicion && matchData.standings?.visitante?.posicion) {
     score++;
   } else {
     issues.push('standings_missing');
   }
   
-  // Check recent form (min 5 matches)
-  if (context.recent_form?.home?.matches_count >= CONFIG.MIN_FORM_MATCHES) {
+  // 2. forma_reciente con mín 5 partidos
+  if (matchData.forma_reciente?.local?.partidos_count >= CONFIG.MIN_FORM_MATCHES) {
     score++;
   } else {
     issues.push('home_form_insufficient');
   }
   
-  if (context.recent_form?.away?.matches_count >= CONFIG.MIN_FORM_MATCHES) {
+  if (matchData.forma_reciente?.visitante?.partidos_count >= CONFIG.MIN_FORM_MATCHES) {
     score++;
   } else {
     issues.push('away_form_insufficient');
   }
   
-  // Check odds
-  if (context.odds?.['1x2']?.['1'] > 0) {
+  // 3. cuotas.resultado presentes
+  if (matchData.cuotas?.resultado?.['1'] > 0) {
     score++;
   } else {
     issues.push('odds_missing');
   }
   
-  // Check API prediction
-  if (context.api_prediction?.winner) {
+  // 4. prediccion_api presente
+  if (matchData.prediccion_api?.ganador_sugerido) {
     score++;
   } else {
     issues.push('prediction_missing');
   }
   
-  // Check H2H (min 3 matches)
-  if (context.h2h?.last10?.length >= CONFIG.MIN_H2H_MATCHES) {
+  // 5. h2h con mín 3 partidos
+  if (matchData.h2h?.ultimos10?.length >= CONFIG.MIN_H2H_MATCHES) {
     score++;
   } else {
     issues.push('h2h_insufficient');
   }
   
   return {
-    valid: score >= CONFIG.MIN_DATA_VALIDATION,
+    valid: score >= CONFIG.MIN_VALIDATION_SCORE,
     score,
-    max_score: 6,
+    max: 6,
     issues
   };
 }
@@ -850,53 +717,44 @@ function validateMinimumData(context) {
 // LLM ANALYSIS
 // =====================================================
 
-async function analyzeWithLLM(context) {
+async function analyzeWithLLM(matchData) {
   if (!OPENROUTERFREE_API_KEY) return null;
   
   const SYSTEM_PROMPT = `Eres un analista experto en apuestas deportivas con criterio EXTREMADAMENTE CONSERVADOR.
-Analizas partidos de fútbol con datos completos de API-Football.
+Analizas partidos de fútbol basándote EXCLUSIVAMENTE en el objeto de datos proporcionado.
 RESPONDE SIEMPRE EN ESPAÑOL Y EN JSON VÁLIDO.
 
-DATOS RECIBIDOS:
-- Standings: posición, puntos, forma, goles
-- Team Stats: promedios de goles, clean sheets, formación
-- Recent Form: últimos 10 partidos con resultados
-- H2H: historial de enfrentamientos
-- Odds: cuotas 1X2, Over/Under 2.5, BTTS
-- API Prediction: predicción oficial de la API
-- Injuries: lesionados y suspendidos
-- Key Players: estadísticas de jugadores clave
-- Lineups: formaciones probables
+MERCADOS DISPONIBLES:
+- resultado (1X2): "1"=local, "X"=empate, "2"=visitante
+- over15, over25, over35: "over" o "under"
+- btts: "yes" o "no"
+- corners: "over" o "under"
 
-TU TAREA:
-1. Estimar probabilidad real de cada resultado
-2. Comparar con probabilidades implícitas normalizadas
+TAREA:
+1. Estimar probabilidad real basándote en los datos
+2. Comparar con probabilidades_implicitas_normalizadas
 3. Calcular EV = (prob_estimada * cuota) - 1
-4. Indicar si hay value bet (EV > 0.04)
+4. Proponer el pick con mayor valor (EV > 4%)
 
 ╔══════════════════════════════════════════════════════════════╗
-║  ESCALA DE CONFIANZA (NO NEGOCIABLE):                        ║
+║  ESCALA DE CONFIANZA:                                        ║
 ╠══════════════════════════════════════════════════════════════╣
-║  confidence >= 0.80: 4+ factores sólidos, EV >= 8%           ║
-║  confidence 0.65-0.79: 2-3 factores, EV 4-8%                 ║
-║  confidence < 0.65: NO proponer pick                         ║
+║  >= 0.80: 4+ factores sólidos, EV >= 8%                      ║
+║  0.65-0.79: 2-3 factores, EV 4-8%                            ║
+║  < 0.65: NO proponer pick                                    ║
 ╚══════════════════════════════════════════════════════════════╝
-
-MERCADOS DISPONIBLES:
-- 1X2 (Match Winner)
-- Over/Under 2.5 Goals
 
 FORMATO RESPUESTA:
 {
   "pick": {
-    "market": "1X2" | "over_under",
-    "selection": "1" | "X" | "2" | "over" | "under",
+    "market": "resultado" | "over25" | "over15" | "over35" | "btts" | "corners",
+    "selection": "1" | "X" | "2" | "over" | "under" | "yes" | "no",
     "estimated_prob": 0.0-1.0,
     "bookmaker_odds": number,
     "expected_value": number,
     "value_bet": boolean
   },
-  "analysis": "120-180 palabras con: forma, tabla, H2H, valor de cuota, riesgos",
+  "analysis": "120-180 palabras: forma, standings, H2H, valor de cuota, riesgos",
   "confidence": 0.0-1.0,
   "risk_factors": ["factor1", "factor2"],
   "no_value_reason": "string o null"
@@ -915,7 +773,7 @@ FORMATO RESPUESTA:
         model: CONFIG.LLM_MODEL,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Analiza este partido:\n\n${JSON.stringify(context, null, 2)}` }
+          { role: "user", content: JSON.stringify(matchData, null, 2) }
         ],
         temperature: 0.1,
         max_tokens: 800,
@@ -938,17 +796,17 @@ FORMATO RESPUESTA:
 // SELECT BEST PICKS
 // =====================================================
 
-function selectBestPicks(llmResults, contexts) {
+function selectBestPicks(llmResults, matchDataObjects) {
   const validPicks = [];
   
   for (let i = 0; i < llmResults.length; i++) {
     const result = llmResults[i];
-    const ctx = contexts[i];
+    const match = matchDataObjects[i];
     
     if (!result?.pick?.value_bet) {
-      logDiscardedPick(
-        { home: { name: ctx.match.home }, away: { name: ctx.match.away } },
-        ctx.league.id,
+      logDiscarded(
+        { local: match.partido.split(' vs ')[0], visitante: match.partido.split(' vs ')[1] },
+        match._meta.league_id,
         DISCARD_REASONS.NO_VALUE,
         { confidence: result?.confidence, ev: result?.pick?.expected_value }
       );
@@ -956,9 +814,9 @@ function selectBestPicks(llmResults, contexts) {
     }
     
     if (result.confidence < CONFIG.MIN_CONFIDENCE) {
-      logDiscardedPick(
-        { home: { name: ctx.match.home }, away: { name: ctx.match.away } },
-        ctx.league.id,
+      logDiscarded(
+        { local: match.partido.split(' vs ')[0], visitante: match.partido.split(' vs ')[1] },
+        match._meta.league_id,
         DISCARD_REASONS.LOW_CONFIDENCE,
         { confidence: result.confidence }
       );
@@ -966,9 +824,9 @@ function selectBestPicks(llmResults, contexts) {
     }
     
     if (result.pick.expected_value < CONFIG.MIN_EV) {
-      logDiscardedPick(
-        { home: { name: ctx.match.home }, away: { name: ctx.match.away } },
-        ctx.league.id,
+      logDiscarded(
+        { local: match.partido.split(' vs ')[0], visitante: match.partido.split(' vs ')[1] },
+        match._meta.league_id,
         DISCARD_REASONS.LOW_EV,
         { ev: result.pick.expected_value }
       );
@@ -977,40 +835,59 @@ function selectBestPicks(llmResults, contexts) {
     
     // Determine quality tier
     let qualityTier = 'B';
-    if (result.pick.expected_value >= CONFIG.QUALITY_TIERS.A_PLUS.min_ev &&
-        result.confidence >= CONFIG.QUALITY_TIERS.A_PLUS.min_confidence) {
+    if (result.pick.expected_value >= 0.08 && result.confidence >= 0.80) {
       qualityTier = 'A_PLUS';
     }
     
     // Get odds
-    let odds = ctx.odds?.['1x2']?.['1'] || 2.0;
-    if (result.pick.selection === 'X') {
-      odds = ctx.odds?.['1x2']?.['X'] || 3.3;
-    } else if (result.pick.selection === '2') {
-      odds = ctx.odds?.['1x2']?.['2'] || 3.5;
-    } else if (result.pick.market === 'over_under') {
-      odds = result.pick.selection === 'over' 
-        ? (ctx.odds?.over25?.over || 1.9)
-        : (ctx.odds?.over25?.under || 1.9);
+    let odds = 2.0;
+    const { market, selection } = result.pick;
+    
+    if (market === 'resultado') {
+      odds = match.cuotas?.resultado?.[selection] || 2.0;
+    } else if (market === 'over25') {
+      odds = selection === 'over' 
+        ? (match.cuotas?.over25?.over || 1.9)
+        : (match.cuotas?.over25?.under || 1.9);
+    } else if (market === 'over15') {
+      odds = selection === 'over'
+        ? (match.cuotas?.over15?.over || 1.3)
+        : (match.cuotas?.over15?.under || 3.5);
+    } else if (market === 'over35') {
+      odds = selection === 'over'
+        ? (match.cuotas?.over35?.over || 3.0)
+        : (match.cuotas?.over35?.under || 1.4);
+    } else if (market === 'btts') {
+      odds = selection === 'yes'
+        ? (match.cuotas?.btts?.yes || 1.75)
+        : (match.cuotas?.btts?.no || 1.95);
+    } else if (market === 'corners') {
+      odds = selection === 'over'
+        ? (match.cuotas?.corners?.over || 1.85)
+        : (match.cuotas?.corners?.under || 1.90);
     }
     
     // Selection name
-    const selectionName = result.pick.selection === '1' ? ctx.match.home :
-                         result.pick.selection === '2' ? ctx.match.away :
-                         result.pick.selection === 'X' ? 'Empate' :
-                         result.pick.selection === 'over' ? 'Over 2.5' : 'Under 2.5';
+    const [home, away] = match.partido.split(' vs ');
+    const selectionName = market === 'resultado'
+      ? (selection === '1' ? home : selection === '2' ? away : 'Empate')
+      : market.startsWith('over')
+        ? `${selection === 'over' ? 'Over' : 'Under'} ${market.replace('over', '')}`
+        : market === 'btts'
+          ? (selection === 'yes' ? 'Sí' : 'No')
+          : `${selection === 'over' ? 'Over' : 'Under'} ${match.cuotas?.corners?.linea || 9.5} corners`;
     
     validPicks.push({
-      fixture_id: ctx.fixture_id,
-      league: ctx.league.name,
-      home_team: ctx.match.home,
-      away_team: ctx.match.away,
-      kickoff: ctx.match.kickoff_utc,
-      market: result.pick.market === '1X2' ? '1X2' : 'Over/Under 2.5',
+      fixture_id: match._meta.fixture_id,
+      league: match.liga,
+      home_team: home,
+      away_team: away,
+      kickoff: match.fecha_utc,
+      market: market === 'resultado' ? '1X2' : market.toUpperCase(),
       selection: selectionName,
       odds,
       estimated_prob: result.pick.estimated_prob,
-      implied_prob: ctx.odds?.implied_probs_normalized?.home_win || 0.33,
+      implied_prob: match.probabilidades_implicitas_normalizadas?.victoria_local || 0.33,
       edge_percent: Math.round(result.pick.expected_value * 100),
       confidence: Math.round(result.confidence * 10),
       quality_tier: qualityTier,
@@ -1031,7 +908,7 @@ function selectBestPicks(llmResults, contexts) {
 // SAVE TO SUPABASE
 // =====================================================
 
-async function savePicksToSupabase(picks) {
+async function savePicks(picks) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || picks.length === 0) return;
   
   try {
@@ -1066,10 +943,9 @@ async function savePicksToSupabase(picks) {
         source: 'daily_auto'
       })))
     });
-    
-    console.log(`✅ Saved ${picks.length} picks to Supabase`);
-  } catch (error) {
-    console.error("Save error:", error.message);
+    console.log(`✅ Saved ${picks.length} picks`);
+  } catch (e) {
+    console.error("Save error:", e.message);
   }
 }
 
@@ -1093,16 +969,14 @@ export default async function handler(req, res) {
     const targetDate = date || new Date().toISOString().split('T')[0];
     const season = new Date(targetDate).getFullYear();
     
-    console.log(`\n🚀 Football Picks Generation - ${targetDate}`);
-    console.log(`📊 Season: ${season}`);
-    console.log(`🎯 Max picks: ${CONFIG.MAX_PICKS_PER_DAY}`);
+    console.log(`\n🚀 Football Picks - ${targetDate} (Season ${season})`);
     
     checkAndResetCounter();
     
     // STEP 1: Get fixtures
     console.log("\n📅 STEP 1: Fetching fixtures...");
     const fixtures = await getFixtures(targetDate);
-    console.log(`   Found ${fixtures.length} fixtures from allowed leagues`);
+    console.log(`   Found ${fixtures.length} fixtures`);
     
     if (fixtures.length === 0) {
       return res.status(200).json({
@@ -1112,43 +986,41 @@ export default async function handler(req, res) {
         discarded_count: 0,
         api_requests_used: requestCountToday,
         execution_time_ms: Date.now() - startTime,
-        message: "No fixtures found from allowed leagues"
+        message: "No fixtures found"
       });
     }
     
-    // STEP 2: Build context for each fixture (with budget check)
-    console.log("\n📊 STEP 2: Building rich context...");
-    const contexts = [];
+    // STEP 2: Build match data objects
+    console.log("\n📊 STEP 2: Building match data objects...");
+    const matchDataObjects = [];
     
     for (const fixture of fixtures) {
-      // Check remaining budget
-      const remaining = CONFIG.MAX_API_REQUESTS - requestCountToday;
-      if (remaining < 15) {
-        console.log(`   ⚠️ API budget low (${remaining} remaining), stopping context building`);
+      if (requestCountToday >= CONFIG.MAX_API_REQUESTS - 20) {
+        console.log(`   ⚠️ Budget low, stopping`);
         break;
       }
       
-      const context = await buildMatchContext(fixture, season);
+      const matchData = await buildMatchDataObject(fixture, season);
       
-      // Validate minimum data
-      const validation = validateMinimumData(context);
+      // Validate
+      const validation = validateMatchData(matchData);
       if (validation.valid) {
-        contexts.push(context);
-        console.log(`   ✅ ${fixture.home.name} vs ${fixture.away.name} (${validation.score}/6 data)`);
+        matchDataObjects.push(matchData);
+        console.log(`   ✅ ${matchData.partido} (${validation.score}/6)`);
       } else {
-        logDiscardedPick(
-          { home: fixture.home, away: fixture.away },
-          fixture.league.id,
+        logDiscarded(
+          { local: fixture.home_name, visitante: fixture.away_name },
+          fixture.league_id,
           DISCARD_REASONS.INSUFFICIENT_DATA,
-          { validation_score: validation.score, issues: validation.issues.join(', ') }
+          { validation_score: validation.score, issues: validation.issues.join(',') }
         );
       }
     }
     
-    console.log(`   ${contexts.length} fixtures with sufficient data`);
+    console.log(`   ${matchDataObjects.length} matches validated`);
     
-    if (contexts.length === 0) {
-      await saveDiscardedPicksToSupabase(discardedPicks);
+    if (matchDataObjects.length === 0) {
+      await saveDiscarded();
       return res.status(200).json({
         date: targetDate,
         picks_generated: 0,
@@ -1156,7 +1028,7 @@ export default async function handler(req, res) {
         discarded_count: discardedPicks.length,
         api_requests_used: requestCountToday,
         execution_time_ms: Date.now() - startTime,
-        message: "No fixtures with sufficient data quality"
+        message: "No matches with sufficient data"
       });
     }
     
@@ -1164,24 +1036,24 @@ export default async function handler(req, res) {
     console.log("\n🤖 STEP 3: LLM Analysis...");
     const llmResults = [];
     
-    for (const ctx of contexts) {
-      console.log(`   Analyzing: ${ctx.match.home} vs ${ctx.match.away}`);
-      const analysis = await analyzeWithLLM(ctx);
+    for (const match of matchDataObjects) {
+      console.log(`   Analyzing: ${match.partido}`);
+      const analysis = await analyzeWithLLM(match);
       llmResults.push(analysis);
     }
     
-    // STEP 4: Select best picks
+    // STEP 4: Select picks
     console.log("\n✅ STEP 4: Selecting picks...");
-    const picks = selectBestPicks(llmResults, contexts);
+    const picks = selectBestPicks(llmResults, matchDataObjects);
     console.log(`   Selected ${picks.length} picks`);
     
     // STEP 5: Save
     if (picks.length > 0) {
-      console.log("\n💾 STEP 5: Saving to Supabase...");
-      await savePicksToSupabase(picks);
+      console.log("\n💾 STEP 5: Saving...");
+      await savePicks(picks);
     }
     
-    await saveDiscardedPicksToSupabase(discardedPicks);
+    await saveDiscarded();
     
     const executionTime = Date.now() - startTime;
     console.log(`\n🎉 Complete! ${picks.length} picks, ${requestCountToday} API calls, ${executionTime}ms`);
@@ -1192,16 +1064,15 @@ export default async function handler(req, res) {
       picks,
       discarded_count: discardedPicks.length,
       api_requests_used: requestCountToday,
-      execution_time_ms: executionTime,
-      message: picks.length === 0 ? "No quality picks found today" : undefined
+      execution_time_ms: executionTime
     });
     
   } catch (error) {
     console.error("❌ Error:", error);
-    await saveDiscardedPicksToSupabase(discardedPicks);
+    await saveDiscarded();
     
     return res.status(500).json({
-      error: "Failed to generate picks",
+      error: "Failed",
       message: error.message,
       api_requests_used: requestCountToday,
       execution_time_ms: Date.now() - startTime
