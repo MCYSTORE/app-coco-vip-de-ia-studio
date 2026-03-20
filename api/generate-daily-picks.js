@@ -25,16 +25,27 @@ const CONFIG = {
   MAX_API_REQUESTS: 100,
   
   ALLOWED_LEAGUES: [
+    // Top 5 European Leagues
     { id: 39, name: "Premier League", country: "England", tier: 1 },
     { id: 140, name: "La Liga", country: "Spain", tier: 1 },
     { id: 135, name: "Serie A", country: "Italy", tier: 1 },
     { id: 78, name: "Bundesliga", country: "Germany", tier: 1 },
     { id: 61, name: "Ligue 1", country: "France", tier: 1 },
+    // European Competitions
     { id: 2, name: "UEFA Champions League", country: "Europe", tier: 1 },
     { id: 3, name: "UEFA Europa League", country: "Europe", tier: 1 },
     { id: 848, name: "UEFA Conference League", country: "Europe", tier: 2 },
+    // Other European Leagues
+    { id: 94, name: "Liga Portugal", country: "Portugal", tier: 2 },
+    { id: 88, name: "Eredivisie", country: "Netherlands", tier: 2 },
+    { id: 144, name: "Jupiler Pro League", country: "Belgium", tier: 2 },
+    { id: 179, name: "Premiership", country: "Scotland", tier: 2 },
+    { id: 203, name: "Süper Lig", country: "Turkey", tier: 2 },
+    // Americas
     { id: 71, name: "Brasileirao Serie A", country: "Brazil", tier: 2 },
-    { id: 128, name: "Liga Profesional", country: "Argentina", tier: 2 }
+    { id: 128, name: "Liga Profesional", country: "Argentina", tier: 2 },
+    { id: 262, name: "Liga MX", country: "Mexico", tier: 2 },
+    { id: 253, name: "MLS", country: "USA", tier: 2 }
   ],
   
   MIN_CONFIDENCE: 0.65,
@@ -155,10 +166,16 @@ async function getFixtures(date) {
   const data = await fetchAPI(`fixtures?date=${date}&timezone=UTC`);
   if (!data?.response) return [];
   
-  return data.response
-    .filter(f => f.fixture.status.short === 'NS')
-    .filter(f => CONFIG.ALLOWED_LEAGUES.some(l => l.id === f.league.id))
-    .map(f => ({
+  // Include upcoming and live match states
+  const validStates = ['NS', 'TBD', 'PST', 'CANC', 'SUSP', 'INT', 'LIVE', '1H', '2H', 'HT'];
+  
+  const filtered = data.response
+    .filter(f => validStates.includes(f.fixture.status.short))
+    .filter(f => CONFIG.ALLOWED_LEAGUES.some(l => l.id === f.league.id));
+  
+  console.log(`   Total fixtures: ${data.response.length}, After league filter: ${filtered.length}`);
+  
+  return filtered.map(f => ({
       fixture_id: f.fixture.id,
       league_id: f.league.id,
       league_name: f.league.name,
