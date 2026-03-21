@@ -80,7 +80,7 @@ export default function Picks({ onNavigate }: PicksProps) {
           message: data.error || `Error al generar picks de ${sportNames[sport]}`
         });
       }
-    } catch (error: {
+    } catch (error: any) {
       setGenerateResult({
         success: false,
         message: error.message || 'Error de conexión'
