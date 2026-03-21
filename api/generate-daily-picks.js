@@ -200,19 +200,38 @@ async function saveDiscarded() {
 // =====================================================
 
 async function getFixtures(date) {
+  console.log(`   🔍 Fetching fixtures for ${date}...`);
   const data = await fetchAPI(`fixtures?date=${date}&timezone=UTC`);
-  if (!data?.response) return [];
+  
+  if (!data?.response) {
+    console.log(`   ⚠️ No response from API fixtures endpoint`);
+    return [];
+  }
+  
+  console.log(`   📊 API returned ${data.response.length} total fixtures`);
+  
+  // Log first few unique leagues
+  const uniqueLeagues = [...new Set(data.response.map(f => f.league.id))];
+  console.log(`   📋 Unique leagues found: ${uniqueLeagues.slice(0, 10).join(', ')}${uniqueLeagues.length > 10 ? '...' : ''}`);
   
   // Include upcoming and live match states
   const validStates = ['NS', 'TBD', 'PST', 'CANC', 'SUSP', 'INT', 'LIVE', '1H', '2H', 'HT'];
   
-  const filtered = data.response
-    .filter(f => validStates.includes(f.fixture.status.short))
-    .filter(f => CONFIG.ALLOWED_LEAGUES.some(l => l.id === f.league.id));
+  const afterStatusFilter = data.response.filter(f => validStates.includes(f.fixture.status.short));
+  console.log(`   📊 After status filter: ${afterStatusFilter.length}`);
   
-  console.log(`   Total fixtures: ${data.response.length}, After league filter: ${filtered.length}`);
+  const afterLeagueFilter = afterStatusFilter.filter(f => CONFIG.ALLOWED_LEAGUES.some(l => l.id === f.league.id));
+  console.log(`   📊 After league filter: ${afterLeagueFilter.length}`);
   
-  return filtered.map(f => ({
+  // Debug: show which leagues matched
+  const matchedLeagues = afterStatusFilter
+    .filter(f => CONFIG.ALLOWED_LEAGUES.some(l => l.id === f.league.id))
+    .map(f => f.league.id);
+  const unmatchedLeagues = [...new Set(afterStatusFilter.filter(f => !CONFIG.ALLOWED_LEAGUES.some(l => l.id === f.league.id)).map(f => f.league.id))];
+  console.log(`   📋 Matched leagues: ${[...new Set(matchedLeagues)].join(', ') || 'NONE'}`);
+  console.log(`   📋 Unmatched leagues (sample): ${unmatchedLeagues.slice(0, 5).join(', ')}`);
+  
+  return afterLeagueFilter.map(f => ({
       fixture_id: f.fixture.id,
       league_id: f.league.id,
       league_name: f.league.name,
