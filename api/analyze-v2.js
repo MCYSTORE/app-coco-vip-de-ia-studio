@@ -3,14 +3,10 @@
  * 4-Step Pipeline: Odds API → Perplexity → DeepSeek Reasoning → DeepSeek Formatting
  * 
  * STEP 1: The Odds API - Real odds
- * STEP 2: Perplexity (sonar-pro) - Web research
+ * STEP 2: Perplexity (sonar) - Web research
  * STEP 3: DeepSeek R1 - Free reasoning (NO JSON)
- * STEP 4: DeepSeek R1 - Format to JSON
- * 
- * Saves to Google Sheets automatically
+ * STEP 4: DeepSeek Chat V3 - Format to JSON
  */
-
-import { saveAnalysis, isSheetsConfigured } from '../lib/sheets.service.ts';
 
 // ═══════════════════════════════════════════════════════════════
 // STEP 2: PERPLEXITY SYSTEM PROMPT (Extended)
@@ -265,7 +261,7 @@ export default async function handler(req, res) {
 
   try {
     // ═══════════════════════════════════════════════════════════════
-    // STEP 1: FETCH ODDS FROM THE ODDS API (unchanged)
+    // STEP 1: FETCH ODDS FROM THE ODDS API
     // ═══════════════════════════════════════════════════════════════
     console.log('\n📊 STEP 1: Obteniendo cuotas en tiempo real...');
     
@@ -329,7 +325,7 @@ export default async function handler(req, res) {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 2: RESEARCH WITH PERPLEXITY (Extended)
+    // STEP 2: RESEARCH WITH PERPLEXITY
     // ═══════════════════════════════════════════════════════════════
     console.log('\n📡 STEP 2: Perplexity investigando la web (sonar)...');
     
@@ -350,7 +346,7 @@ export default async function handler(req, res) {
             { role: 'system', content: PERPLEXITY_SYSTEM_PROMPT },
             { role: 'user', content: `${matchName}\nDeporte: ${sport}\nFecha: Marzo 2026` }
           ],
-          max_tokens: 2500  // Increased from 1500
+          max_tokens: 2500
         })
       });
 
@@ -371,7 +367,7 @@ export default async function handler(req, res) {
     console.log(researchContext.substring(0, 500) + '...');
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 3: DEEPSEEK FREE REASONING (NEW - No JSON)
+    // STEP 3: DEEPSEEK FREE REASONING
     // ═══════════════════════════════════════════════════════════════
     console.log('\n🧠 STEP 3: DeepSeek razonando en profundidad...');
 
@@ -436,7 +432,7 @@ ${researchContext}`
         'X-Title': 'Coco VIP Format'
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-chat',  // V3 - más barato para solo formatear
+        model: 'deepseek/deepseek-chat',
         messages: [
           { role: 'system', content: DEEPSEEK_FORMATTING_PROMPT },
           { 
@@ -475,7 +471,7 @@ ${deepReasoningText}`
     // Add metadata
     result.oddsPayload = oddsData;
     result.researchContext = researchContext;
-    result.deep_reasoning = deepReasoningText;  // NEW: Save reasoning text
+    result.deep_reasoning = deepReasoningText;
     result.timestamp = new Date().toISOString();
     result.sport = sport === 'football' ? 'Football' : sport === 'basketball' ? 'NBA' : 'MLB';
     result.estimated_odds = !oddsData;
@@ -499,42 +495,6 @@ ${deepReasoningText}`
     console.log(`📊 Data Quality: ${result.data_quality}`);
     console.log(`🧠 Deep Reasoning: ${deepReasoningText.length} chars`);
     console.log(`${'═'.repeat(60)}\n`);
-
-    // ═══════════════════════════════════════════════════════════════
-    // SAVE TO GOOGLE SHEETS (async, non-blocking)
-    // ═══════════════════════════════════════════════════════════════
-    const analysisId = crypto.randomUUID();
-    
-    if (isSheetsConfigured()) {
-      console.log('💾 Guardando análisis en Google Sheets...');
-      
-      // Extract league from match name or use default
-      const leagueMatch = matchName.match(/(?:La Liga|Premier League|Bundesliga|Serie A|Ligue 1|Champions|Europa|Copa)/i);
-      const league = leagueMatch ? leagueMatch[0] : 'Otro';
-      
-      // Save async without blocking response
-      saveAnalysis({
-        id: analysisId,
-        matchName: result.match || matchName,
-        sport: result.sport || 'Football',
-        league: league,
-        dataQuality: result.data_quality || 'media',
-        jsonResult: result,
-        researchA: researchContext.substring(0, 5000),  // Limit size
-        researchB: '',  // Could split research context here
-        deepThinking: deepReasoningText.substring(0, 10000),  // Limit size
-        modelAnalyst: 'deepseek-r1',
-        source: 'manual'
-      }).catch(err => {
-        console.error('⚠️ Error saving to Sheets (non-blocking):', err.message);
-      });
-    } else {
-      console.log('⚠️ Google Sheets not configured, skipping save');
-    }
-
-    // Add ID to result
-    result.id = analysisId;
-    result.sheets_saved = isSheetsConfigured();
 
     return res.status(200).json(result);
 
