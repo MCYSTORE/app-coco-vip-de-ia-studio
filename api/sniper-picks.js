@@ -1,5 +1,5 @@
 /**
- * Coco VIP - Sniper Picks API (LIGHT Pipeline)
+ * Coco VIP - Sniper Picks API (LIGHT Pipeline) - v2.1
  * GET: Get top 3 sniper picks for a sport
  * 
  * Cost: ~$0.006/pick (100x cheaper than full analysis)
