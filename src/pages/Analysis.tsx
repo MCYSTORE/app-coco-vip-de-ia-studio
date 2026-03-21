@@ -817,6 +817,22 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
                 </div>
               </div>
 
+              {/* Data Quality Badge - FIX 3E */}
+              {result.dataQuality && (
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>Calidad de datos:</span>
+                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                    result.dataQuality === 'alta' ? 'bg-green-100 text-green-700' :
+                    result.dataQuality === 'media' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {result.dataQuality === 'alta' ? '✅ Stats Reales' : 
+                     result.dataQuality === 'media' ? '⚠️ Stats Parciales' : 
+                     '⚠️ Datos Limitados'}
+                  </span>
+                </div>
+              )}
+
               {/* Analysis Text */}
               <div className="space-y-2">
                 <p className="text-xs font-bold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
@@ -827,6 +843,197 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
                   "{result.analysisText}"
                 </p>
               </div>
+
+              {/* FIX 3B: Detailed Analysis Section (Expandable) */}
+              {result.best_pick?.analysis && (
+                <div className="mt-4 space-y-3">
+                  <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl"
+                    style={{ backgroundColor: 'var(--color-bg-secondary)' }}
+                  >
+                    <span className="text-xs font-bold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                      <BarChart3 className="w-4 h-4" style={{ color: 'var(--color-accent-primary)' }} />
+                      Análisis Detallado
+                    </span>
+                    {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  
+                  <AnimatePresence>
+                    {showAdvanced && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden space-y-4"
+                      >
+                        {/* Pros */}
+                        {result.best_pick.analysis.pros?.length > 0 && (
+                          <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--color-success-bg)' }}>
+                            <p className="text-xs font-bold mb-2" style={{ color: 'var(--color-success)' }}>✓ Factores a Favor</p>
+                            <ul className="space-y-1">
+                              {result.best_pick.analysis.pros.map((pro, idx) => (
+                                <li key={idx} className="text-sm flex items-start gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                                  <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: 'var(--color-success)' }} />
+                                  {pro}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {/* Cons */}
+                        {result.best_pick.analysis.cons?.length > 0 && (
+                          <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--color-danger-bg)' }}>
+                            <p className="text-xs font-bold mb-2" style={{ color: 'var(--color-danger)' }}>✗ Riesgos</p>
+                            <ul className="space-y-1">
+                              {result.best_pick.analysis.cons.map((con, idx) => (
+                                <li key={idx} className="text-sm flex items-start gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: 'var(--color-danger)' }} />
+                                  {con}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {/* Stats Highlights */}
+                        {result.best_pick.stats_highlights && (
+                          <div className="grid grid-cols-3 gap-2">
+                            {Object.entries(result.best_pick.stats_highlights).map(([key, value]) => (
+                              <div key={key} className="p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+                                <p className="text-[10px] uppercase font-bold mb-1" style={{ color: 'var(--color-text-muted)' }}>Métrica</p>
+                                <p className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>{value}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {/* FIX 3C: All Markets Table (Expandable) */}
+              {result.mercados_completos && (
+                <div className="mt-4 space-y-3">
+                  <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl"
+                    style={{ backgroundColor: 'var(--color-bg-secondary)' }}
+                  >
+                    <span className="text-xs font-bold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                      <Target className="w-4 h-4" style={{ color: 'var(--color-accent-primary)' }} />
+                      Todos los Mercados
+                    </span>
+                    {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                  
+                  <AnimatePresence>
+                    {showAdvanced && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr style={{ backgroundColor: 'var(--color-bg-card)' }}>
+                                <th className="py-2 px-3 text-left font-bold" style={{ color: 'var(--color-text-primary)' }}>Mercado</th>
+                                <th className="py-2 px-3 text-left font-bold" style={{ color: 'var(--color-text-primary)' }}>Selección</th>
+                                <th className="py-2 px-3 text-center font-bold" style={{ color: 'var(--color-text-primary)' }}>Cuota</th>
+                                <th className="py-2 px-3 text-center font-bold" style={{ color: 'var(--color-text-primary)' }}>Edge</th>
+                                <th className="py-2 px-3 text-center font-bold" style={{ color: 'var(--color-text-primary)' }}>Value</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {/* Resultado */}
+                              {result.mercados_completos.resultado && (
+                                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                                  <td className="py-2 px-3" style={{ color: 'var(--color-text-secondary)' }}>Resultado</td>
+                                  <td className="py-2 px-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.resultado.seleccion}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.resultado.odds?.toFixed(2) || '-'}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: result.mercados_completos.resultado.edge_percentage > 0 ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+                                    {result.mercados_completos.resultado.edge_percentage ? `+${result.mercados_completos.resultado.edge_percentage.toFixed(1)}%` : '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">{result.mercados_completos.resultado.value_bet ? '✅' : '❌'}</td>
+                                </tr>
+                              )}
+                              {/* Total */}
+                              {result.mercados_completos.total && (
+                                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                                  <td className="py-2 px-3" style={{ color: 'var(--color-text-secondary)' }}>Over/Under</td>
+                                  <td className="py-2 px-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.total.seleccion} {result.mercados_completos.total.linea}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.total.odds?.toFixed(2) || '-'}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: result.mercados_completos.total.edge_percentage && result.mercados_completos.total.edge_percentage > 0 ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+                                    {result.mercados_completos.total.edge_percentage ? `+${result.mercados_completos.total.edge_percentage.toFixed(1)}%` : '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">{result.mercados_completos.total.value_bet ? '✅' : '❌'}</td>
+                                </tr>
+                              )}
+                              {/* BTTS */}
+                              {result.mercados_completos.ambos_anotan && result.mercados_completos.ambos_anotan.aplica && (
+                                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                                  <td className="py-2 px-3" style={{ color: 'var(--color-text-secondary)' }}>Ambos Anotan</td>
+                                  <td className="py-2 px-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.ambos_anotan.seleccion === 'yes' ? 'Sí' : 'No'}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.ambos_anotan.odds?.toFixed(2) || '-'}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: result.mercados_completos.ambos_anotan.edge_percentage && result.mercados_completos.ambos_anotan.edge_percentage > 0 ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+                                    {result.mercados_completos.ambos_anotan.edge_percentage ? `+${result.mercados_completos.ambos_anotan.edge_percentage.toFixed(1)}%` : '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">{result.mercados_completos.ambos_anotan.value_bet ? '✅' : '❌'}</td>
+                                </tr>
+                              )}
+                              {/* Corners */}
+                              {result.mercados_completos.corners && result.mercados_completos.corners.aplica && (
+                                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                                  <td className="py-2 px-3" style={{ color: 'var(--color-text-secondary)' }}>Corners</td>
+                                  <td className="py-2 px-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.corners.seleccion} {result.mercados_completos.corners.total_estimado}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.corners.odds?.toFixed(2) || '-'}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: result.mercados_completos.corners.edge_percentage && result.mercados_completos.corners.edge_percentage > 0 ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+                                    {result.mercados_completos.corners.edge_percentage ? `+${result.mercados_completos.corners.edge_percentage.toFixed(1)}%` : '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">{result.mercados_completos.corners.value_bet ? '✅' : '❌'}</td>
+                                </tr>
+                              )}
+                              {/* Handicap */}
+                              {result.mercados_completos.handicap && result.mercados_completos.handicap.aplica && (
+                                <tr className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                                  <td className="py-2 px-3" style={{ color: 'var(--color-text-secondary)' }}>Hándicap</td>
+                                  <td className="py-2 px-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.handicap.seleccion} {result.mercados_completos.handicap.linea}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: 'var(--color-text-primary)' }}>{result.mercados_completos.handicap.odds?.toFixed(2) || '-'}</td>
+                                  <td className="py-2 px-3 text-center" style={{ color: result.mercados_completos.handicap.edge_percentage && result.mercados_completos.handicap.edge_percentage > 0 ? 'var(--color-success)' : 'var(--color-text-secondary)' }}>
+                                    {result.mercados_completos.handicap.edge_percentage ? `+${result.mercados_completos.handicap.edge_percentage.toFixed(1)}%` : '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">{result.mercados_completos.handicap.value_bet ? '✅' : '❌'}</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {/* FIX 3D: Research Context Accordion */}
+              {result.researchContext && (
+                <div className="mt-4 space-y-2">
+                  <details className="group">
+                    <summary className="flex items-center justify-between p-3 rounded-xl cursor-pointer" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+                      <span className="text-xs font-bold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                        📡 Ver contexto investigado por Perplexity
+                      </span>
+                      <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
+                    </summary>
+                    <div className="mt-2 p-4 rounded-xl text-xs leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto" style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-secondary)' }}>
+                      {result.researchContext}
+                    </div>
+                  </details>
+                </div>
+              )}
 
               {/* Debate Section */}
               {result.debate && (
