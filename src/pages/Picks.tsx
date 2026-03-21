@@ -65,7 +65,7 @@ export default function Picks({ onNavigate, onAnalyzeMatch }: PicksProps) {
   }
 
   // ═════════════════════════════════════════════════════════════════════════════════
-  // VISUAL DESIGN - Matching Reference Image Exactly
+  // VISUAL DESIGN - Premium Image Cards with Glass Effects
   // ═════════════════════════════════════════════════════════════════════════════════
   
   return (
@@ -81,133 +81,109 @@ export default function Picks({ onNavigate, onAnalyzeMatch }: PicksProps) {
         </p>
       </div>
 
-      {/* Sport Cards - Clean Design Matching Reference */}
-      <div className="space-y-3">
+      {/* Sport Cards - Premium Image Cards with Glass Effects */}
+      <div className="space-y-4">
         {/* Fútbol Card */}
-        <motion.button
+        <motion.section
           whileTap={{ scale: 0.98 }}
           onClick={() => openSniperModal('football')}
-          className="w-full rounded-[20px] overflow-hidden relative"
-          style={{ 
-            height: '110px',
-            background: 'linear-gradient(135deg, #2D7A3A 0%, #1B5E3A 100%)'
-          }}
+          className="relative h-48 rounded-[1.25rem] overflow-hidden shadow-xl group cursor-pointer"
         >
-          {/* Background ball image effect */}
-          <div 
-            className="absolute right-[-20px] bottom-[-10px] w-[130px] h-[130px] opacity-25 pointer-events-none"
-            style={{ 
-              background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='35' fill='%23ffffff'/%3E%3Cpath d='M50 25 L35 25 L50 5 L65 25 L50' fill='%23ffffff' opacity='0.3'/%3E%3Cpath d='M25 50 L50 35 L50 65 L75 50 L50 35' fill='%23ffffff' opacity='0.3'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center',
-              backgroundSize: 'contain'
-            }}
+          {/* Background Image */}
+          <img 
+            alt="Estadio de fútbol" 
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+            src="https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=800&q=80"
           />
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
           
           {/* Content */}
-          <div className="relative z-10 flex items-center p-5">
-            {/* Icon */}
-            <div 
-              className="w-12 h-12 rounded-[14px] flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            >
-              <span className="text-2xl">⚽</span>
+          <div className="relative h-full p-6 flex flex-col justify-end">
+            {/* Icon at top */}
+            <div className="mb-auto">
+              <div className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md bg-white/10 border border-white/20">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.38 0 2.66.41 3.74 1.11L12 10l-3.74-3.89C9.34 5.41 10.62 5 12 5zm-7 7c0-2.03.76-3.88 2-5.29L12 12l-5 5.29C5.76 15.88 5 14.03 5 12zm7 7c-1.38 0-2.66-.41-3.74-1.11L12 14l3.74 3.89C14.66 18.59 13.38 19 12 19zm7-7c0 2.03-.76 3.88-2 5.29L12 12l5-5.29C18.24 8.12 19 9.97 19 12z" fill="currentColor"/>
+                </svg>
+              </div>
             </div>
-            
-            {/* Text */}
-            <div className="flex-1 ml-4">
-              <p className="text-xl font-bold text-white">Fútbol</p>
-              <p className="text-[13px] text-white/85">Top 5 ligas + UEFA</p>
+            {/* Text at bottom */}
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-1">Fútbol</h2>
+              <p className="text-white/80 text-sm leading-tight">Top 5 ligas + UEFA Champions League, La Liga, Premier League</p>
             </div>
-            
-            {/* Arrow */}
-            <span className="text-3xl text-white/60">›</span>
           </div>
-        </motion.button>
+        </motion.section>
 
         {/* NBA Card */}
-        <motion.button
+        <motion.section
           whileTap={{ scale: 0.98 }}
           onClick={() => openSniperModal('basketball')}
-          className="w-full rounded-[20px] overflow-hidden relative"
-          style={{ 
-            height: '110px',
-            background: 'linear-gradient(135deg, #C94A1A 0%, #E74C3C 100%)'
-          }}
+          className="relative h-48 rounded-[1.25rem] overflow-hidden shadow-xl group cursor-pointer"
         >
-          {/* Background ball image effect */}
-          <div 
-            className="absolute right-[-20px] bottom-[-10px] w-[130px] h-[130px] opacity-25 pointer-events-none"
-            style={{ 
-              background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='35' fill='%23D35420' stroke='%23ffffff' stroke-width='2'/%3E%3Cpath d='M50 30 L70 50 L50 70 L30 50' fill='none' stroke='%23ffffff' stroke-width='2'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center',
-              backgroundSize: 'contain'
-            }}
+          {/* Background Image */}
+          <img 
+            alt="Jugador de NBA" 
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+            src="https://images.unsplash.com/photo-1546519638-68e109498ffc?w=800&q=80"
           />
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
           
           {/* Content */}
-          <div className="relative z-10 flex items-center p-5">
-            {/* Icon */}
-            <div 
-              className="w-12 h-12 rounded-[14px] flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            >
-              <span className="text-2xl">🏀</span>
+          <div className="relative h-full p-6 flex flex-col justify-end">
+            {/* Icon at top */}
+            <div className="mb-auto">
+              <div className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md bg-white/10 border border-white/20">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8 0-1.45.39-2.81 1.07-3.98L6 9l1.5-1.5L9 9l1.5-1.5L12 9l1.5-1.5L15 9l1.5-1.5L18 9l-.93-.98A7.95 7.95 0 0112 20z" fill="currentColor"/>
+                </svg>
+              </div>
             </div>
-            
-            {/* Text */}
-            <div className="flex-1 ml-4">
-              <p className="text-xl font-bold text-white">NBA + Player Props</p>
-              <p className="text-[13px] text-white/85">Puntos, rebotes, asistencias</p>
+            {/* Text at bottom */}
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-1">NBA + Player Props</h2>
+              <p className="text-white/80 text-sm leading-tight">Puntos, rebotes, asistencias, triples, robos, bloqueos</p>
             </div>
-            
-            {/* Arrow */}
-            <span className="text-3xl text-white/60">›</span>
           </div>
-        </motion.button>
+        </motion.section>
 
         {/* MLB Card */}
-        <motion.button
+        <motion.section
           whileTap={{ scale: 0.98 }}
           onClick={() => openSniperModal('baseball')}
-          className="w-full rounded-[20px] overflow-hidden relative"
-          style={{ 
-            height: '110px',
-            background: 'linear-gradient(135deg, #2B4FBF 0%, #3498DB 100%)'
-          }}
+          className="relative h-48 rounded-[1.25rem] overflow-hidden shadow-xl group cursor-pointer"
         >
-          {/* Background ball image effect */}
-          <div 
-            className="absolute right-[-20px] bottom-[-10px] w-[130px] h-[130px] opacity-25 pointer-events-none"
-            style={{ 
-              background: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%23ffffff' stroke-width='2'/%3E%3Cpath d='M50 25 L50 35 M35 50 L50 65 M65 50' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E")`,
-              backgroundRepeat: 'no-repeat',
-              backgroundPosition: 'center',
-              backgroundSize: 'contain'
-            }}
+          {/* Background Image */}
+          <img 
+            alt="Estadio de béisbol" 
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+            src="https://images.unsplash.com/photo-1566577739112-5180d4bf9390?w=800&q=80"
           />
+          {/* Gradient Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent" />
           
           {/* Content */}
-          <div className="relative z-10 flex items-center p-5">
-            {/* Icon */}
-            <div 
-              className="w-12 h-12 rounded-[14px] flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            >
-              <span className="text-2xl">🏆</span>
+          <div className="relative h-full p-6 flex flex-col justify-end">
+            {/* Icon at top */}
+            <div className="mb-auto">
+              <div className="w-10 h-10 flex items-center justify-center rounded-xl backdrop-blur-md bg-white/10 border border-white/20">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 2v4M12 18v4M2 12h4M18 12h4" strokeLinecap="round"/>
+                </svg>
+              </div>
             </div>
-            
-            {/* Text */}
-            <div className="flex-1 ml-4">
-              <p className="text-xl font-bold text-white">MLB</p>
-              <p className="text-[13px] text-white/85">Run lines, totales</p>
+            {/* Text at bottom */}
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-1">MLB</h2>
+              <p className="text-white/80 text-sm leading-tight">Run lines, totales, apuestas en vivo, futures</p>
             </div>
-            
-            {/* Arrow */}
-            <span className="text-3xl text-white/60">›</span>
           </div>
-        </motion.button>
+        </motion.section>
       </div>
 
       {/* Last Update */}
