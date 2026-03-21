@@ -1,10 +1,9 @@
 /**
  * Coco VIP - History Save API Endpoint
- * Guarda análisis en Google Sheets via Apps Script
+ * Guarda análisis en Supabase (PostgreSQL)
  */
 
-// URL del Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzNqeh3-kN6Bi1IWr8Zkp-AVfrtJJ-qq0QTmsN8il75nwbE7kvZ4-AFikICPcr-iQ/exec';
+import { saveAnalysis } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
   // CORS
@@ -32,109 +31,84 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log('📊 Guardando análisis en Google Sheets...');
+    console.log('📊 Guardando análisis en Supabase...');
     console.log('📊 Match:', result.matchName || result.match || 'Unknown');
     console.log('📊 Sport:', result.sport || 'football');
 
-    // Preparar datos simplificados para el Apps Script
-    const simplifiedData = {
+    // Preparar datos para Supabase
+    const analysisData = {
       matchName: result.matchName || result.match || '',
       match: result.match || result.matchName || '',
       sport: result.sport || 'football',
       league: result.league || 'Otro',
-      dataQuality: result.dataQuality || result.data_quality || 'media',
+      
+      // Selección y mercado
       selection: result.selection || result.best_pick?.selection || '',
       bestMarket: result.bestMarket || result.best_pick?.market || '',
+      
+      // Odds y probabilidades
       odds: parseFloat(result.odds || result.best_pick?.odds || 0),
+      estimated_prob: parseFloat(result.estimated_prob || result.best_pick?.probability || 0),
+      implied_prob: parseFloat(result.implied_prob || (result.odds ? 1/result.odds : 0)),
       edgePercent: parseFloat(result.edgePercent || result.best_pick?.edge_percentage || result.edge_percentage || 0),
-      confidence: parseInt(result.confidence || Math.round((result.best_pick?.confidence_score || 0.5) * 10)),
+      
+      // Confianza y calidad (convertir de 0-1 a 1-10)
+      confidence: result.confidence || result.best_pick?.confidence_score || 0.5,
       tier: result.tier || result.best_pick?.tier || 'B',
-      kellyStake: parseFloat(result.kellyStake || result.best_pick?.kelly_stake_units || result.kelly_stake_units || 0),
+      
+      // Análisis
       analysisText: result.analysisText || result.analysis_text || result.best_pick?.analysis?.conclusion || '',
       deep_reasoning: result.deep_reasoning || '',
       researchContext: result.researchContext || '',
       supporting_factors: result.supporting_factors || [],
       risk_factors: result.risk_factors || [],
-      userContext: userContext
+      
+      // Kelly
+      kellyStake: parseFloat(result.kellyStake || result.best_pick?.kelly_stake_units || result.kelly_stake_units || 0),
+      
+      // Contexto del usuario
+      userContext: userContext,
+      
+      // Fuente
+      source: result.source || 'manual'
     };
 
-    console.log('📊 Datos preparados:', JSON.stringify(simplifiedData).substring(0, 200));
+    console.log('📊 Datos preparados:', JSON.stringify(analysisData).substring(0, 200));
 
-    // Codificar los datos
-    const encodedData = encodeURIComponent(JSON.stringify(simplifiedData));
-    const urlWithParams = `${APPS_SCRIPT_URL}?data=${encodedData}`;
+    // Guardar en Supabase
+    const saveResult = await saveAnalysis(analysisData);
 
-    console.log('📊 Enviando a Apps Script...');
-
-    // Hacer la petición con timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const response = await fetch(urlWithParams, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-        redirect: 'follow',
-        signal: controller.signal
+    if (saveResult.success) {
+      console.log('✅ Análisis guardado correctamente en Supabase');
+      return res.status(200).json({
+        success: true,
+        id: saveResult.id,
+        message: 'Análisis guardado en Supabase',
+        savedAt: new Date().toISOString()
       });
-
-      clearTimeout(timeoutId);
-
-      const responseText = await response.text();
-      console.log('📊 Response status:', response.status);
-      console.log('📊 Response text:', responseText.substring(0, 200));
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        if (responseText.includes('success') || response.status === 200) {
-          data = { success: true };
-        } else {
-          data = { success: false, error: 'Respuesta inválida del servidor' };
-        }
-      }
-
-      if (data.success) {
-        console.log('✅ Análisis guardado correctamente en Sheets');
-        return res.status(200).json({
-          success: true,
-          id: data.id || `analysis-${Date.now()}`,
-          message: 'Análisis guardado en Google Sheets',
-          savedAt: new Date().toISOString()
-        });
-      } else {
-        console.error('❌ Error del Apps Script:', data.error);
+    } else {
+      console.error('❌ Error al guardar en Supabase:', saveResult.error);
+      
+      // Si la tabla no existe, devolver instrucciones
+      if (saveResult.needsTableCreation) {
         return res.status(500).json({
           success: false,
-          error: data.error || 'Error al guardar en Sheets'
-        });
-      }
-
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      console.error('❌ Fetch error:', fetchError.message);
-      
-      // Si hay timeout o error de red, asumimos éxito porque el Apps Script puede tardar
-      if (fetchError.name === 'AbortError') {
-        return res.status(200).json({
-          success: true,
-          id: `analysis-${Date.now()}`,
-          message: 'Análisis enviado (verificar en Sheets)',
-          savedAt: new Date().toISOString()
+          error: 'La tabla predictions no existe. Ejecuta el SQL de creación en Supabase.',
+          sqlNeeded: true
         });
       }
       
-      throw fetchError;
+      return res.status(500).json({
+        success: false,
+        error: saveResult.error || 'Error al guardar en Supabase'
+      });
     }
 
   } catch (error) {
     console.error('❌ History Save API error:', error);
     return res.status(500).json({
       success: false,
-      error: 'Error de conexión',
+      error: 'Error interno del servidor',
       message: error.message
     });
   }
