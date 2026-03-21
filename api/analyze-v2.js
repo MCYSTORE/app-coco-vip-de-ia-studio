@@ -1,31 +1,58 @@
 /**
  * Coco VIP - AI Analysis Endpoint
- * 4-Step Pipeline: Odds API → Perplexity → DeepSeek Reasoning → DeepSeek Formatting
+ * 4-Step Pipeline: Odds API → Perplexity → Claude Reasoning → Grok Formatting
  * 
  * STEP 1: The Odds API - Real odds
- * STEP 2: Perplexity (sonar) - Web research
- * STEP 3: DeepSeek R1 - Free reasoning (NO JSON)
- * STEP 4: DeepSeek Chat V3 - Format to JSON
+ * STEP 2: Perplexity (sonar) - Web research (ESPAÑOL)
+ * STEP 3: Claude Sonnet 4 - Free reasoning (ESPAÑOL FORZADO)
+ * STEP 4: Grok 4.1 Fast - Format to JSON (ESPAÑOL FORZADO)
  */
 
 // ═══════════════════════════════════════════════════════════════
-// STEP 2: PERPLEXITY SYSTEM PROMPT (Extended)
+// DETECT LANGUAGE HELPER
 // ═══════════════════════════════════════════════════════════════
 
-const PERPLEXITY_SYSTEM_PROMPT = `You are a sports data researcher with real-time web access.
+function detectLanguage(text) {
+  if (!text) return 'unknown';
+  
+  // Chinese detection
+  if (/[一-鿿]/.test(text)) return 'chinese';
+  // Japanese detection
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'japanese';
+  // Korean detection
+  if (/[\uAC00-\uD7AF]/.test(text)) return 'korean';
+  // Spanish detection (common words)
+  if (/\b(el|la|los|las|de|que|en|es|un|una|por|con|para|como|más|pero|sus|le|ya|o|este|sí|porque|esta|entre|cuando|muy|sin|sobre|también|me|hasta|hay|donde|quien|desde|todo|nos|durante|todos|uno|les|ni|contra|otros|ese|eso|ante|ellos|e|esto|mí|antes|algunos|qué|unos|yo|otro|otras|otra|él|tanto|esa|estos|mucho|quienes|nada|muchos|cual|poco|ella|estar|estas|algunas|algo|nosotros|mi|mis|tú|te|ti|tu|tus|ellas|nosotras|vosostros|vosostras|os|mío|mía|míos|mías|tuyo|tuya|tuyos|tuyas|suyo|suya|suyos|suyas|nuestro|nuestra|nuestros|nuestras|vuestro|vuestra|vuestros|vuestras|esos|esas|estoy|estás|está|estamos|estáis|están|esté|estés|estemos|estéis|estén|estaré|estarás|estará|estaremos|estaréis|estarán|estaría|estarías|estaríamos|estaríais|estarían|estaba|estabas|estábamos|estabais|estaban|estuve|estuviste|estuvo|estuvimos|estuvisteis|estuvieron|estuviera|estuvieras|estuviéramos|estuvierais|estuvieran|estuviese|estuvieses|estuviésemos|estuvieseis|estuviesen|estando|estado|estada|estados|estadas|estad|he|has|ha|hemos|habéis|han|haya|hayas|hayamos|hayáis|hayan|habré|habrás|habrá|habremos|habréis|habrán|habría|habrías|habríamos|habríais|habrían|había|habías|habíamos|habíais|habían|hube|hubiste|hubo|hubimos|hubisteis|hubieron|hubiera|hubieras|hubiéramos|hubierais|hubieran|hubiese|hubieses|hubiésemos|hubieseis|hubiesen|habiendo|habido|habida|habidos|habidas|soy|eres|es|somos|sois|son|sea|seas|seamos|seáis|sean|seré|serás|será|seremos|seréis|serán|sería|serías|seríamos|seríais|serían|era|eras|éramos|erais|eran|fui|fuiste|fue|fuimos|fuisteis|fueron|fuera|fueras|fuéramos|fuerais|fueran|fuese|fueses|fuésemos|fueseis|fuesen|siendo|sido|tengo|tienes|tiene|tenemos|tenéis|tienen|tenga|tengas|tengamos|tengáis|tengan|tendré|tendrás|tendrá|tendremos|tendréis|tendrán|tendría|tendrías|tendríamos|tendríais|tendrían|tenía|tenías|teníamos|teníais|tenían|tuve|tuviste|tuvo|tuvimos|tuvisteis|tuvieron|tuviera|tuvieras|tuviéramos|tuvierais|tuvieran|tuviese|tuvieses|tuviésemos|tuvieseis|tuviesen|teniendo|tenido|tenida|tenidos|tenidas|tenid)\b/i.test(text)) return 'spanish';
+  // English detection
+  if (/\b(the|be|to|of|and|a|in|that|have|I|it|for|not|on|with|he|as|you|do|at|this|but|his|by|from|they|we|say|her|she|or|an|will|my|one|all|would|there|their|what|so|up|out|if|about|who|get|which|go|me|when|make|can|like|time|no|just|him|know|take|people|into|year|your|good|some|could|them|see|other|than|then|now|look|only|come|its|over|think|also|back|after|use|two|how|our|work|first|well|way|even|new|want|because|any|these|give|day|most|us)\b/i.test(text)) return 'english';
+  
+  return 'unknown';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STEP 2: PERPLEXITY SYSTEM PROMPT (ESPAÑOL FORZADO)
+// ═══════════════════════════════════════════════════════════════
+
+const PERPLEXITY_SYSTEM_PROMPT = `🚨 INSTRUCCIONES CRÍTICAS DE IDIOMA (OBLIGATORIO):
+1. Responder EXCLUSIVAMENTE en español neutro.
+2. Si encuentras fuentes en otros idiomas, traduce al español.
+3. NO incluyas texto en otros idiomas en tu respuesta.
+4. La respuesta debe ser legible para un usuario chileno.
+
+You are a sports data researcher with real-time web access.
 Today is March 2026, season 2025/2026.
 Search the web RIGHT NOW for this specific match.
 
-CRITICAL REQUIREMENT: Return minimum 800 words of structured data.
+CRITICAL REQUIREMENT: Return minimum 800 words of structured data IN SPANISH.
 Include exact numbers for every stat.
 Include exact scores for every recent match.
 Include confirmed player names for every injury.
 
 You MUST find and return ALL of these items.
-For each item NOT found, write exactly: '[NOT FOUND]'
+For each item NOT found, write exactly: '[NO ENCONTRADO]'
 NEVER skip an item. NEVER summarize vaguely.
 
-Return a structured report with these exact sections:
+Return a structured report in SPANISH with these exact sections:
 
 ## FORMA RECIENTE (últimos 5 partidos con marcadores exactos)
 Local: [fecha] vs [rival] [marcador] | [fecha] vs [rival]...
@@ -36,7 +63,7 @@ Local: [nombre jugador] - [lesión] - [fuente/fecha]
 Visitante: [nombre jugador] - [lesión] - [fuente/fecha]
 Si no hay: 'Plantilla completa confirmada'
 
-## ESTADÍSTICAS AVANZADAS 2025/2026
+## ESTADÍSTICAS AVANADAS 2025/2026
 xG local (promedio): [número]
 xGA local (promedio): [número]  
 xG visitante (promedio): [número]
@@ -58,168 +85,150 @@ Visitante: [posición]º con [puntos] pts en [liga]
 [titular concreto con fecha]
 
 DO NOT hallucinate. DO NOT use 2024 data.
-Respond in Spanish.`;
+Responde SOLO en español con datos estructurados.`;
 
 // ═══════════════════════════════════════════════════════════════
-// STEP 3: DEEPSEEK FREE REASONING PROMPT
+// STEP 3: CLAUDE SONNET 4 - REASONING PROMPT (ESPAÑOL FORZADO)
 // ═══════════════════════════════════════════════════════════════
 
-const DEEPSEEK_REASONING_PROMPT = `Eres un analista cuantitativo de apuestas deportivas.
-Razona libremente y en profundidad sobre este partido.
-NO te preocupes por el formato todavía.
-Escribe tu análisis completo en texto libre, mínimo 600 palabras, cubriendo:
+const CLAUDE_REASONING_PROMPT = `🚨 INSTRUCCIONES CRÍTICAS DE IDIOMA (OBLIGATORIO):
+1. Toda tu respuesta debe ser EXCLUSIVAMENTE en ESPAÑOL NEUTRO.
+2. Si el contexto contiene texto en chino, inglés u otro idioma:
+   TRADUCE todo al español antes de analizar.
+   Mantén nombres propios y números sin traducir.
+3. NO incluyas NINGÚN texto en otros idiomas en tu respuesta.
+4. La respuesta debe ser legible para un usuario chileno.
+
+Eres Coco, analista cuantitativo de apuestas deportivas premium.
+Hoy es Marzo 2026, temporada 2025/2026.
+
+Estructura tu razonamiento en 5 pasos numerados:
 
 1. EVALUACIÓN DE CUOTAS
-   ¿Dónde se equivoca la casa? Calcular prob implícita de cada mercado y comparar con tu estimación real.
-   Mostrar los cálculos explícitamente:
-   prob_implicita = 1/1.85 = 54.1%
-   mi_estimacion = 63% por razones X, Y, Z
-   EV = (0.63 × 1.85) - 1 = +16.5%
+   Calcular probabilidades implícitas:
+   prob_implicita = 1 / cuota
+   Normalizar por casa de apuestas.
+   Identificar dónde la casa se equivoca más.
 
-2. ANÁLISIS TÁCTICO PROFUNDO
-   ¿Qué implican los lesionados para el sistema de juego?
-   ¿Cómo afecta el contexto de tabla a la motivación?
-   ¿Qué dice el xG sobre la eficiencia real vs los goles?
+2. ANÁLISIS TÁCTICO (usar datos del contexto táctico)
+   Lesionados, motivación, contexto de tabla, alineaciones.
 
-3. IDENTIFICACIÓN DEL MEJOR MERCADO
-   ¿Dónde está el mayor edge oculto?
-   ¿Por qué ese mercado y no otro?
-   Razonar con números concretos del contexto.
+3. ESTADÍSTICAS AVANZADAS (usar datos del contexto stats)
+   xG, PPDA, forma reciente con marcadores exactos, H2H.
 
-4. DEVIL'S ADVOCATE
-   ¿Cuál es el escenario más probable donde este pick falla?
-   ¿Qué probabilidad le das a ese escenario?
+4. CÁLCULO DE EDGE Y KELLY
+   prob_estimada = tu estimación real basada en datos
+   EV = (prob_estimada × cuota) - 1
+   kelly = (prob_estimada × cuota - 1) / (cuota - 1)
+   Redondear a 2 decimales.
 
-5. CONCLUSIÓN DE CONFIANZA
-   ¿Cuánto apostarías realmente y por qué?
-   Kelly criterion calculado paso a paso.
+5. MEJOR PICK
+   Identificar el mercado con más edge.
+   Explicar por qué es superior a otros mercados.
 
-Usa los datos del contexto. Si falta un dato di exactamente cuál falta y cómo afecta tu confianza.`;
+Escribe mínimo 600 palabras en español.
+Usa datos NUMÉRICOS concretos del contexto.
+Si falta un dato: 'No disponible en contexto actual'.`;
 
 // ═══════════════════════════════════════════════════════════════
-// STEP 4: DEEPSEEK FORMATTING PROMPT
+// STEP 4: GROK 4.1 FAST - FORMATTING PROMPT (ESPAÑOL FORZADO)
 // ═══════════════════════════════════════════════════════════════
 
-const DEEPSEEK_FORMATTING_PROMPT = `Eres un formateador de datos JSON.
-Recibirás un análisis deportivo en texto libre.
-Tu ÚNICA tarea es convertirlo al schema JSON exacto.
-NO añadas nueva información.
-NO cambies los números ni conclusiones del análisis.
-NO generalices lo que ya está concreto en el análisis.
-Copia literalmente las frases analíticas al JSON.
-El campo conclusion debe tener mínimo 100 palabras copiadas directamente del análisis recibido.
+const GROK_FORMATTING_PROMPT = `🚨 INSTRUCCIONES CRÍTICAS DE IDIOMA (OBLIGATORIO):
+1. Convertir el análisis recibido al JSON EXACTO del schema.
+2. TODOS los campos de texto deben estar en ESPAÑOL.
+3. Si encuentras frases en chino/inglés en el razonamiento:
+   TRADUCE al español antes de copiar al JSON.
+4. NO incluir texto en otros idiomas en el JSON final.
 
-REGLAS DE CÁLCULO:
-1. prob_implicita = 1 / cuota
-2. prob_normalizada = prob_implicita / suma_todas (para 1X2)
-3. edge_percentage = ((prob_estimada × cuota) - 1) × 100
-4. Solo value_bet=true si edge >= 3% Y confidence_score >= 0.65
-5. Kelly = (prob_estimada × cuota - 1) / (cuota - 1), máximo 0.25
-6. Tier A+: confidence >= 0.80, Tier B: 0.65-0.79
+Tu ÚNICA tarea es formatear. NO añadir nueva información.
 
-JSON de respuesta (sin backticks):
+Schema JSON requerido (copiar exactamente):
+
 {
   "sport": "Football",
   "match": "nombre completo del partido",
   "data_quality": "alta|media|baja",
   "estimated_odds": false,
   "best_pick": {
-    "market": "1X2|Over/Under|BTTS|Corners|Handicap",
-    "selection": "apuesta específica con número (ej: 'Over 2.5', 'Bayern', 'Sí')",
-    "odds": 1.85,
-    "edge_percentage": 5.5,
-    "confidence_score": 0.75,
+    "market": "string en español",
+    "selection": "string en español",
+    "odds": number,
+    "edge_percentage": number,
+    "confidence_score": number,
     "tier": "A+|B",
-    "kelly_stake_units": 0.10,
-    "value_bet": true,
+    "kelly_stake_units": number,
+    "value_bet": true|false,
     "analysis": {
-      "pros": ["factor con número específico", "factor con número específico", "factor con número específico"],
-      "cons": ["riesgo concreto"],
-      "conclusion": "mínimo 100 palabras copiadas directamente del análisis recibido"
+      "pros": ["en español", "en español", "en español"],
+      "cons": ["en español"],
+      "conclusion": "texto completo EN ESPAÑOL, máximo 80 palabras"
     },
     "stats_highlights": {
-      "metric_1": "xG Local: 2.1 promedio",
-      "metric_2": "xGA Visitante: 1.4 promedio", 
-      "metric_3": "H2H: 3 victorias local en últimos 5"
+      "metric_1": "stat en español",
+      "metric_2": "stat en español", 
+      "metric_3": "stat en español"
     }
   },
   "mercados_completos": {
     "resultado": {
-      "seleccion": "1|X|2",
-      "prob_estimada": 0.45,
-      "prob_implicita_normalizada": 0.42,
-      "odds": 2.10,
-      "edge_percentage": 5.0,
-      "value_bet": true,
-      "confidence_score": 0.70,
-      "analisis": "análisis breve con datos"
+      "seleccion": "en español",
+      "prob_estimada": number,
+      "prob_implicita_normalizada": number,
+      "odds": number,
+      "edge_percentage": number,
+      "value_bet": true|false,
+      "confidence_score": number,
+      "analisis": "en español"
     },
     "total": {
-      "xg_o_pts_estimado": 2.5,
       "seleccion": "over|under",
-      "linea": 2.5,
-      "odds": 1.90,
-      "edge_percentage": 5.0,
-      "value_bet": true,
-      "confidence_score": 0.72,
-      "analisis": "análisis con xG"
+      "linea": number,
+      "odds": number,
+      "edge_percentage": number,
+      "value_bet": true|false,
+      "confidence_score": number,
+      "analisis": "en español"
     },
     "ambos_anotan": {
-      "aplica": true,
       "seleccion": "yes|no",
-      "prob_btts_estimada": 0.55,
-      "odds": 1.75,
-      "edge_percentage": 3.5,
-      "value_bet": true,
-      "confidence_score": 0.68,
-      "analisis": "análisis BTTS"
+      "prob_btts_estimada": number,
+      "odds": number,
+      "edge_percentage": number,
+      "value_bet": true|false,
+      "confidence_score": number,
+      "analisis": "en español"
     },
     "corners": {
-      "aplica": true,
-      "total_estimado": 9.5,
-      "tendencia": "alta|media|baja",
-      "linea": null,
       "seleccion": "over|under|sin_cuota",
-      "odds": null,
-      "edge_percentage": null,
-      "value_bet": false,
-      "confidence_score": 0.60,
-      "analisis": "análisis corners"
+      "total_estimado": number,
+      "linea": number,
+      "odds": number,
+      "edge_percentage": number,
+      "value_bet": true|false,
+      "confidence_score": number,
+      "analisis": "en español"
     },
     "handicap": {
-      "aplica": true,
-      "linea": -0.5,
-      "seleccion": "home|away",
-      "odds": 1.85,
-      "edge_percentage": 4.0,
-      "value_bet": true,
-      "confidence_score": 0.67,
-      "analisis": "análisis handicap"
-    },
-    "proyeccion_final": {
-      "resultado_probable": "1X|12|X2",
-      "marcador_estimado": "2-1",
-      "rango_total": "2-4 goles",
-      "btts_probable": true,
-      "banker_double_viable": true,
-      "banker_double_cuota_minima": 1.35,
-      "resumen": "resumen ejecutivo",
-      "mejor_pick_resumen": {
-        "market": "string",
-        "selection": "string",
-        "odds": 1.85,
-        "edge_percentage": 5.0,
-        "kelly_stake_units": 0.10
-      }
+      "seleccion": "home|away|null",
+      "linea": number,
+      "odds": number,
+      "edge_percentage": number,
+      "value_bet": true|false,
+      "confidence_score": number,
+      "analisis": "en español"
     }
   },
   "picks_con_value": [
-    {"market": "string", "selection": "string", "odds": 1.85, "edge_percentage": 5.0, "confidence_score": 0.75, "tier": "B"}
-  ],
-  "supporting_factors": ["factor 1 con dato", "factor 2 con dato", "factor 3 con dato"],
-  "risk_factors": ["riesgo 1", "riesgo 2"],
-  "ajustes_aplicados": ["ajuste aplicado"],
-  "fuentes_contexto": ["fuente 1", "fuente 2"]
+    {
+      "market": "string en español",
+      "selection": "string en español",
+      "odds": number,
+      "edge_percentage": number,
+      "confidence_score": number,
+      "tier": "A+|B"
+    }
+  ]
 }`;
 
 export default async function handler(req, res) {
@@ -325,7 +334,7 @@ export default async function handler(req, res) {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 2: RESEARCH WITH PERPLEXITY
+    // STEP 2: RESEARCH WITH PERPLEXITY (ESPAÑOL)
     // ═══════════════════════════════════════════════════════════════
     console.log('\n📡 STEP 2: Perplexity investigando la web (sonar)...');
     
@@ -344,7 +353,7 @@ export default async function handler(req, res) {
           model: 'perplexity/sonar',
           messages: [
             { role: 'system', content: PERPLEXITY_SYSTEM_PROMPT },
-            { role: 'user', content: `${matchName}\nDeporte: ${sport}\nFecha: Marzo 2026` }
+            { role: 'user', content: `${matchName}\nDeporte: ${sport}\nFecha: Marzo 2026\n\nResponde SOLO en español con datos estructurados.` }
           ],
           max_tokens: 2500
         })
@@ -354,6 +363,7 @@ export default async function handler(req, res) {
         const pData = await perplexityRes.json();
         researchContext = pData.choices?.[0]?.message?.content || 'Sin contexto.';
         console.log(`✅ Research completado (${researchContext.length} chars)`);
+        console.log(`🌐 Idioma detectado en research: ${detectLanguage(researchContext)}`);
       } else {
         const errText = await perplexityRes.text();
         console.log(`⚠️ Perplexity error: ${perplexityRes.status}`);
@@ -367,10 +377,11 @@ export default async function handler(req, res) {
     console.log(researchContext.substring(0, 500) + '...');
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 3: DEEPSEEK FREE REASONING
+    // STEP 3: CLAUDE SONNET 4 - FREE REASONING (ESPAÑOL FORZADO)
     // ═══════════════════════════════════════════════════════════════
-    console.log('\n🧠 STEP 3: DeepSeek razonando en profundidad...');
+    console.log('\n🧠 STEP 3: Claude Sonnet 4 razonando en profundidad...');
 
+    const oddsPayload = oddsData;
     const oddsText = oddsData ? JSON.stringify(oddsData, null, 2) : 'Cuotas no disponibles - estimar líneas razonables';
 
     const reasoningRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -382,23 +393,27 @@ export default async function handler(req, res) {
         'X-Title': 'Coco VIP Reasoning'
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-r1',
+        model: 'anthropic/claude-sonnet-4',
         messages: [
-          { role: 'system', content: DEEPSEEK_REASONING_PROMPT },
+          { role: 'system', content: CLAUDE_REASONING_PROMPT },
           { 
             role: 'user', 
-            content: `Partido: ${matchName}
-Deporte: ${sport}
+            content: `${matchName} (${sport})
 
 CUOTAS ACTUALES:
 ${oddsText}
 
-CONTEXTO INVESTIGADO:
-${researchContext}` 
+CONTEXTO TÁCTICO Y SITUACIONAL:
+${researchContext}
+
+CONTEXTO ESTADÍSTICO Y H2H:
+${researchContext}
+
+Analiza paso a paso en ESPAÑOL.` 
           }
         ],
-        max_tokens: 3000,
-        temperature: 0.2
+        max_tokens: 4000,
+        temperature: 0.1
       })
     });
 
@@ -408,9 +423,10 @@ ${researchContext}`
       const reasoningData = await reasoningRes.json();
       deepReasoningText = reasoningData.choices?.[0]?.message?.content || '';
       console.log(`✅ Razonamiento completado (${deepReasoningText.length} chars)`);
+      console.log(`🌐 Idioma detectado en razonamiento: ${detectLanguage(deepReasoningText)}`);
     } else {
       const errText = await reasoningRes.text();
-      console.log(`⚠️ DeepSeek Reasoning error: ${reasoningRes.status}`);
+      console.log(`⚠️ Claude Reasoning error: ${reasoningRes.status}`);
       deepReasoningText = 'Razonamiento no disponible debido a un error en el modelo.';
     }
 
@@ -419,9 +435,25 @@ ${researchContext}`
     console.log(deepReasoningText.substring(0, 500) + '...');
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 4: DEEPSEEK FORMATTING (JSON output)
+    // CLEAN CHINESE/MARKDOWN FROM REASONING BEFORE FORMATTING
     // ═══════════════════════════════════════════════════════════════
-    console.log('\n⚙️ STEP 4: Estructurando el análisis final...');
+    
+    // Remove markdown code blocks that might contain Chinese
+    let cleanedReasoning = deepReasoningText
+      .replace(/```json[\s\S]*?```/gi, '')
+      .replace(/```[\s\S]*?```/gi, '')
+      .replace(/`[^`]+`/g, match => {
+        // Keep inline code only if it doesn't contain Chinese
+        return /[一-鿿]/.test(match) ? '' : match;
+      })
+      .trim();
+
+    console.log(`🧹 Razonamiento limpiado: ${deepReasoningText.length} → ${cleanedReasoning.length} chars`);
+
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 4: GROK 4.1 FAST - FORMATTING (ESPAÑOL FORZADO)
+    // ═══════════════════════════════════════════════════════════════
+    console.log('\n⚙️ STEP 4: Grok formateando el análisis final...');
 
     const formattingRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -432,26 +464,36 @@ ${researchContext}`
         'X-Title': 'Coco VIP Format'
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-chat',
+        model: 'x-ai/grok-4.1-fast',
         messages: [
-          { role: 'system', content: DEEPSEEK_FORMATTING_PROMPT },
+          { role: 'system', content: GROK_FORMATTING_PROMPT },
           { 
             role: 'user', 
-            content: `ANÁLISIS A FORMATEAR:
+            content: `Razonamiento recibido:
+${cleanedReasoning}
 
-${deepReasoningText}` 
+Convierte EXACTAMENTE a este JSON en ESPAÑOL.
+Traduce cualquier frase en otro idioma.` 
           }
         ],
-        max_tokens: 2500
+        max_tokens: 3000,
+        response_format: { type: 'json_object' }
       })
     });
 
     if (!formattingRes.ok) {
       const errText = await formattingRes.text();
-      throw new Error(`DeepSeek Formatting error ${formattingRes.status}: ${errText.substring(0, 200)}`);
+      throw new Error(`Grok Formatting error ${formattingRes.status}: ${errText.substring(0, 200)}`);
     }
 
     const formattingData = await formattingRes.json();
+    
+    // Check for OpenRouter API errors
+    if (formattingData.error) {
+      console.error('❌ OpenRouter API Error:', formattingData.error);
+      throw new Error(`OpenRouter error: ${formattingData.error.message || JSON.stringify(formattingData.error)}`);
+    }
+    
     let content = formattingData.choices?.[0]?.message?.content || '';
 
     // DEBUG LOG
@@ -460,16 +502,61 @@ ${deepReasoningText}`
 
     // DEBUG LOG - ODDS PAYLOAD
     console.log('\n=== ODDS PAYLOAD ===');
-    console.log(JSON.stringify(oddsData, null, 2));
+    console.log(JSON.stringify(oddsPayload, null, 2));
 
     // Clean markdown if present
     content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
 
-    // Parse JSON
-    const result = JSON.parse(content);
+    // Try to parse JSON safely
+    let result;
+    try {
+      result = JSON.parse(content);
+    } catch (parseError) {
+      console.error('❌ JSON Parse Error. Content received:');
+      console.error(content.substring(0, 1000));
+      
+      // Return a fallback response with the raw analysis
+      return res.status(200).json({
+        sport: sport === 'football' ? 'Football' : sport === 'basketball' ? 'NBA' : 'MLB',
+        match: matchName,
+        data_quality: 'baja',
+        estimated_odds: !oddsData,
+        best_pick: {
+          market: 'Análisis',
+          selection: 'Ver detalles',
+          odds: 1.85,
+          edge_percentage: 0,
+          confidence_score: 0.5,
+          tier: 'B',
+          kelly_stake_units: 0.05,
+          value_bet: false,
+          analysis: {
+            pros: ['Análisis generado'],
+            cons: ['Error en formato de respuesta'],
+            conclusion: content.substring(0, 500) || 'El modelo no pudo generar un JSON válido. Revisa el contexto de investigación.'
+          }
+        },
+        mercados_completos: {
+          proyeccion_final: {
+            resultado_probable: 'N/A',
+            marcador_estimado: 'N/A',
+            resumen: 'Error procesando la respuesta del modelo'
+          }
+        },
+        picks_con_value: [],
+        supporting_factors: [],
+        risk_factors: ['Error en formato de respuesta del modelo'],
+        oddsPayload: oddsPayload,
+        researchContext: researchContext,
+        deep_reasoning: deepReasoningText,
+        timestamp: new Date().toISOString(),
+        parse_error: true,
+        raw_content: content.substring(0, 1000)
+      });
+    }
 
     // Add metadata
-    result.oddsPayload = oddsData;
+    result.oddsPayload = oddsPayload;
     result.researchContext = researchContext;
     result.deep_reasoning = deepReasoningText;
     result.timestamp = new Date().toISOString();
@@ -477,13 +564,17 @@ ${deepReasoningText}`
     result.estimated_odds = !oddsData;
 
     // Set data_quality based on research context
-    if (researchContext.includes('[NOT FOUND]') || researchContext.length < 300) {
+    if (researchContext.includes('[NO ENCONTRADO]') || researchContext.length < 300) {
       result.data_quality = result.data_quality || 'baja';
     } else if (researchContext.includes('xG') && researchContext.includes('LESIONADOS')) {
       result.data_quality = result.data_quality || 'alta';
     } else {
       result.data_quality = result.data_quality || 'media';
     }
+
+    // Final language check
+    const resultLanguage = detectLanguage(JSON.stringify(result));
+    console.log(`🌐 Idioma detectado en resultado final: ${resultLanguage}`);
 
     console.log(`\n${'═'.repeat(60)}`);
     console.log(`✅ ANÁLISIS 4-STEP COMPLETADO`);
