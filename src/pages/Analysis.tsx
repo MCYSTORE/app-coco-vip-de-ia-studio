@@ -12,11 +12,12 @@ const LOADING_MESSAGES = [
   { text: "Analizando con IA...", icon: "🤖" }
 ];
 
-// V2 Pipeline Loading Messages (AI-Driven 3 Steps)
+// V2 Pipeline Loading Messages (AI-Driven 4 Steps)
 const LOADING_MESSAGES_V2 = [
-  { text: "Buscando cuotas en tiempo real...", icon: "🔍", progress: 15 },
-  { text: "Investigando la web (Lesiones, xG, Noticias)...", icon: "📡", progress: 45 },
-  { text: "DeepSeek calculando Edge y valor matemático...", icon: "🤖", progress: 80 }
+  { text: "Obteniendo cuotas en tiempo real...", icon: "🔍", progress: 10 },
+  { text: "Perplexity investigando la web...", icon: "📡", progress: 30 },
+  { text: "DeepSeek razonando en profundidad...", icon: "🧠", progress: 60 },
+  { text: "Estructurando el análisis final...", icon: "⚙️", progress: 85 }
 ];
 
 // xG Stats Section Component
@@ -523,7 +524,10 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
         mercados_completos: data.mercados_completos,
         picks_con_value: data.picks_con_value,
         fuentes_contexto: data.fuentes_contexto,
-        ajustes_aplicados: data.ajustes_aplicados
+        ajustes_aplicados: data.ajustes_aplicados,
+        researchContext: data.researchContext,
+        deep_reasoning: data.deep_reasoning,
+        best_pick: data.best_pick
       };
 
       setResult(normalizedResult);
@@ -744,7 +748,7 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
             <>
               <Zap className="w-5 h-5" />
               {useV2 ? 'Analizar con AI Pipeline v2' : 'Analizar Value Bet'}
-              {useV2 && <span className="text-xs ml-1" style={{ color: 'var(--color-accent-secondary)' }}>(3 pasos)</span>}
+              {useV2 && <span className="text-xs ml-1" style={{ color: 'var(--color-accent-secondary)' }}>(4 pasos)</span>}
             </>
           )}
         </button>
@@ -1018,13 +1022,30 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
                 </div>
               )}
 
-              {/* FIX 3D: Research Context Accordion */}
+              {/* Deep Reasoning Accordion - The thinking behind the analysis */}
+              {result.deep_reasoning && (
+                <div className="mt-4 space-y-2">
+                  <details className="group">
+                    <summary className="flex items-center justify-between p-3 rounded-xl cursor-pointer" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+                      <span className="text-xs font-bold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+                        🧠 Razonamiento del Analista
+                      </span>
+                      <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
+                    </summary>
+                    <div className="mt-2 p-4 rounded-xl text-xs leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto font-mono" style={{ backgroundColor: '#1a1a2e', color: '#a0aec0' }}>
+                      {result.deep_reasoning}
+                    </div>
+                  </details>
+                </div>
+              )}
+
+              {/* Research Context Accordion */}
               {result.researchContext && (
                 <div className="mt-4 space-y-2">
                   <details className="group">
                     <summary className="flex items-center justify-between p-3 rounded-xl cursor-pointer" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
                       <span className="text-xs font-bold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
-                        📡 Ver contexto investigado por Perplexity
+                        📡 Contexto investigado por Perplexity
                       </span>
                       <ChevronDown className="w-4 h-4 group-open:rotate-180 transition-transform" />
                     </summary>

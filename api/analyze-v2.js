@@ -1,15 +1,25 @@
 /**
  * Coco VIP - AI Analysis Endpoint
- * 3-Step Pipeline: Odds API → Perplexity → DeepSeek
+ * 4-Step Pipeline: Odds API → Perplexity → DeepSeek Reasoning → DeepSeek Formatting
+ * 
+ * STEP 1: The Odds API - Real odds
+ * STEP 2: Perplexity (sonar-pro) - Web research
+ * STEP 3: DeepSeek R1 - Free reasoning (NO JSON)
+ * STEP 4: DeepSeek R1 - Format to JSON
  */
 
 // ═══════════════════════════════════════════════════════════════
-// FIX 1: IMPROVED PERPLEXITY PROMPT
+// STEP 2: PERPLEXITY SYSTEM PROMPT (Extended)
 // ═══════════════════════════════════════════════════════════════
 
 const PERPLEXITY_SYSTEM_PROMPT = `You are a sports data researcher with real-time web access.
 Today is March 2026, season 2025/2026.
 Search the web RIGHT NOW for this specific match.
+
+CRITICAL REQUIREMENT: Return minimum 800 words of structured data.
+Include exact numbers for every stat.
+Include exact scores for every recent match.
+Include confirmed player names for every injury.
 
 You MUST find and return ALL of these items.
 For each item NOT found, write exactly: '[NOT FOUND]'
@@ -51,17 +61,53 @@ DO NOT hallucinate. DO NOT use 2024 data.
 Respond in Spanish.`;
 
 // ═══════════════════════════════════════════════════════════════
-// FIX 2: IMPROVED DEEPSEEK PROMPT WITH CRITICAL INSTRUCTIONS
+// STEP 3: DEEPSEEK FREE REASONING PROMPT
 // ═══════════════════════════════════════════════════════════════
 
-const DEEPSEEK_SYSTEM_PROMPT = `INSTRUCCIÓN CRÍTICA DE ANÁLISIS:
-El campo 'conclusion' en best_pick.analysis DEBE tener mínimo 120 palabras y citar DATOS NUMÉRICOS CONCRETOS del contexto recibido.
-Los campos 'pros' deben citar stats específicos con números.
-Ejemplo CORRECTO: 'Bayern promedia xG 2.8 en casa, Unión Berlin xGA 1.9 como visitante. Kane anotó en 4 de los últimos 5 partidos.'
-Ejemplo INCORRECTO (PROHIBIDO): 'Bayern es superior y debería ganar.'
-Si el contexto no tiene datos numéricos: indicar explícitamente qué datos faltan en lugar de generalizar.
+const DEEPSEEK_REASONING_PROMPT = `Eres un analista cuantitativo de apuestas deportivas.
+Razona libremente y en profundidad sobre este partido.
+NO te preocupes por el formato todavía.
+Escribe tu análisis completo en texto libre, mínimo 600 palabras, cubriendo:
 
-Eres analista de apuestas profesional de Coco VIP. Responde SOLO JSON válido sin markdown.
+1. EVALUACIÓN DE CUOTAS
+   ¿Dónde se equivoca la casa? Calcular prob implícita de cada mercado y comparar con tu estimación real.
+   Mostrar los cálculos explícitamente:
+   prob_implicita = 1/1.85 = 54.1%
+   mi_estimacion = 63% por razones X, Y, Z
+   EV = (0.63 × 1.85) - 1 = +16.5%
+
+2. ANÁLISIS TÁCTICO PROFUNDO
+   ¿Qué implican los lesionados para el sistema de juego?
+   ¿Cómo afecta el contexto de tabla a la motivación?
+   ¿Qué dice el xG sobre la eficiencia real vs los goles?
+
+3. IDENTIFICACIÓN DEL MEJOR MERCADO
+   ¿Dónde está el mayor edge oculto?
+   ¿Por qué ese mercado y no otro?
+   Razonar con números concretos del contexto.
+
+4. DEVIL'S ADVOCATE
+   ¿Cuál es el escenario más probable donde este pick falla?
+   ¿Qué probabilidad le das a ese escenario?
+
+5. CONCLUSIÓN DE CONFIANZA
+   ¿Cuánto apostarías realmente y por qué?
+   Kelly criterion calculado paso a paso.
+
+Usa los datos del contexto. Si falta un dato di exactamente cuál falta y cómo afecta tu confianza.`;
+
+// ═══════════════════════════════════════════════════════════════
+// STEP 4: DEEPSEEK FORMATTING PROMPT
+// ═══════════════════════════════════════════════════════════════
+
+const DEEPSEEK_FORMATTING_PROMPT = `Eres un formateador de datos JSON.
+Recibirás un análisis deportivo en texto libre.
+Tu ÚNICA tarea es convertirlo al schema JSON exacto.
+NO añadas nueva información.
+NO cambies los números ni conclusiones del análisis.
+NO generalices lo que ya está concreto en el análisis.
+Copia literalmente las frases analíticas al JSON.
+El campo conclusion debe tener mínimo 100 palabras copiadas directamente del análisis recibido.
 
 REGLAS DE CÁLCULO:
 1. prob_implicita = 1 / cuota
@@ -89,7 +135,7 @@ JSON de respuesta (sin backticks):
     "analysis": {
       "pros": ["factor con número específico", "factor con número específico", "factor con número específico"],
       "cons": ["riesgo concreto"],
-      "conclusion": "mínimo 120 palabras citando datos numéricos del contexto"
+      "conclusion": "mínimo 100 palabras copiadas directamente del análisis recibido"
     },
     "stats_highlights": {
       "metric_1": "xG Local: 2.1 promedio",
@@ -197,7 +243,7 @@ export default async function handler(req, res) {
   }
 
   console.log(`\n${'═'.repeat(60)}`);
-  console.log(`🎯 INICIANDO ANÁLISIS: ${matchName}`);
+  console.log(`🎯 INICIANDO ANÁLISIS 4-STEP: ${matchName}`);
   console.log(`📊 Deporte: ${sport}`);
   console.log(`⏰ ${new Date().toISOString()}`);
   console.log(`${'═'.repeat(60)}`);
@@ -215,9 +261,9 @@ export default async function handler(req, res) {
 
   try {
     // ═══════════════════════════════════════════════════════════════
-    // STEP 1: FETCH ODDS FROM THE ODDS API
+    // STEP 1: FETCH ODDS FROM THE ODDS API (unchanged)
     // ═══════════════════════════════════════════════════════════════
-    console.log('\n📊 STEP 1: Fetching odds from The Odds API...');
+    console.log('\n📊 STEP 1: Obteniendo cuotas en tiempo real...');
     
     let oddsData = null;
     const sportKeyMap = {
@@ -264,7 +310,7 @@ export default async function handler(req, res) {
               } : null
             };
             
-            console.log(`✅ Odds found: ${oddsData.match}`);
+            console.log(`✅ Cuotas encontradas: ${oddsData.match}`);
             console.log(`   Home: ${oddsData.h2h.home} | Draw: ${oddsData.h2h.draw} | Away: ${oddsData.h2h.away}`);
             break;
           }
@@ -275,16 +321,16 @@ export default async function handler(req, res) {
     }
 
     if (!oddsData) {
-      console.log('⚠️ No odds found, analysis will use estimated odds');
+      console.log('⚠️ No se encontraron cuotas, el análisis usará cuotas estimadas');
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 2: RESEARCH WITH PERPLEXITY
+    // STEP 2: RESEARCH WITH PERPLEXITY (Extended)
     // ═══════════════════════════════════════════════════════════════
-    console.log('\n📡 STEP 2: Researching with Perplexity (sonar-pro)...');
+    console.log('\n📡 STEP 2: Perplexity investigando la web (sonar)...');
     
     let researchContext = 'Sin contexto adicional.';
-    
+
     try {
       const perplexityRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
@@ -295,19 +341,19 @@ export default async function handler(req, res) {
           'X-Title': 'Coco VIP Research'
         },
         body: JSON.stringify({
-          model: 'perplexity/sonar-pro',
+          model: 'perplexity/sonar',
           messages: [
             { role: 'system', content: PERPLEXITY_SYSTEM_PROMPT },
             { role: 'user', content: `${matchName}\nDeporte: ${sport}\nFecha: Marzo 2026` }
           ],
-          max_tokens: 1500
+          max_tokens: 2500  // Increased from 1500
         })
       });
 
       if (perplexityRes.ok) {
         const pData = await perplexityRes.json();
         researchContext = pData.choices?.[0]?.message?.content || 'Sin contexto.';
-        console.log(`✅ Research completed (${researchContext.length} chars)`);
+        console.log(`✅ Research completado (${researchContext.length} chars)`);
       } else {
         const errText = await perplexityRes.text();
         console.log(`⚠️ Perplexity error: ${perplexityRes.status}`);
@@ -316,29 +362,29 @@ export default async function handler(req, res) {
       console.log('⚠️ Research failed:', e.message);
     }
 
-    // FIX 4: DEBUG LOG
-    console.log('\n=== PERPLEXITY CONTEXT ===');
+    // DEBUG LOG
+    console.log('\n=== PERPLEXITY CONTEXT (first 500 chars) ===');
     console.log(researchContext.substring(0, 500) + '...');
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 3: DEEPSEEK ANALYSIS
+    // STEP 3: DEEPSEEK FREE REASONING (NEW - No JSON)
     // ═══════════════════════════════════════════════════════════════
-    console.log('\n🤖 STEP 3: DeepSeek R1 Analysis...');
-    
+    console.log('\n🧠 STEP 3: DeepSeek razonando en profundidad...');
+
     const oddsText = oddsData ? JSON.stringify(oddsData, null, 2) : 'Cuotas no disponibles - estimar líneas razonables';
 
-    const deepseekRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const reasoningRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://app-coco-vip-de-ia-studio.vercel.app',
-        'X-Title': 'Coco VIP Quant'
+        'X-Title': 'Coco VIP Reasoning'
       },
       body: JSON.stringify({
         model: 'deepseek/deepseek-r1',
         messages: [
-          { role: 'system', content: DEEPSEEK_SYSTEM_PROMPT },
+          { role: 'system', content: DEEPSEEK_REASONING_PROMPT },
           { 
             role: 'user', 
             content: `Partido: ${matchName}
@@ -351,29 +397,73 @@ CONTEXTO INVESTIGADO:
 ${researchContext}` 
           }
         ],
-        // FIX 2: Increased max_tokens from 1500 to 3500
-        max_tokens: 3500
+        max_tokens: 3000,
+        temperature: 0.2
       })
     });
 
-    if (!deepseekRes.ok) {
-      const errText = await deepseekRes.text();
-      throw new Error(`DeepSeek error ${deepseekRes.status}: ${errText.substring(0, 200)}`);
+    let deepReasoningText = '';
+
+    if (reasoningRes.ok) {
+      const reasoningData = await reasoningRes.json();
+      deepReasoningText = reasoningData.choices?.[0]?.message?.content || '';
+      console.log(`✅ Razonamiento completado (${deepReasoningText.length} chars)`);
+    } else {
+      const errText = await reasoningRes.text();
+      console.log(`⚠️ DeepSeek Reasoning error: ${reasoningRes.status}`);
+      deepReasoningText = 'Razonamiento no disponible debido a un error en el modelo.';
     }
 
-    const deepseekData = await deepseekRes.json();
-    let content = deepseekData.choices?.[0]?.message?.content || '';
+    // DEBUG LOG
+    console.log('\n=== DEEP REASONING (first 500 chars) ===');
+    console.log(deepReasoningText.substring(0, 500) + '...');
 
-    // FIX 4: DEBUG LOG
-    console.log('\n=== DEEPSEEK RAW RESPONSE ===');
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 4: DEEPSEEK FORMATTING (JSON output)
+    // ═══════════════════════════════════════════════════════════════
+    console.log('\n⚙️ STEP 4: Estructurando el análisis final...');
+
+    const formattingRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://app-coco-vip-de-ia-studio.vercel.app',
+        'X-Title': 'Coco VIP Format'
+      },
+      body: JSON.stringify({
+        model: 'deepseek/deepseek-chat',  // V3 - más barato para solo formatear
+        messages: [
+          { role: 'system', content: DEEPSEEK_FORMATTING_PROMPT },
+          { 
+            role: 'user', 
+            content: `ANÁLISIS A FORMATEAR:
+
+${deepReasoningText}` 
+          }
+        ],
+        max_tokens: 2500
+      })
+    });
+
+    if (!formattingRes.ok) {
+      const errText = await formattingRes.text();
+      throw new Error(`DeepSeek Formatting error ${formattingRes.status}: ${errText.substring(0, 200)}`);
+    }
+
+    const formattingData = await formattingRes.json();
+    let content = formattingData.choices?.[0]?.message?.content || '';
+
+    // DEBUG LOG
+    console.log('\n=== FORMATTING RAW RESPONSE (first 500 chars) ===');
     console.log(content.substring(0, 500) + '...');
+
+    // DEBUG LOG - ODDS PAYLOAD
+    console.log('\n=== ODDS PAYLOAD ===');
+    console.log(JSON.stringify(oddsData, null, 2));
 
     // Clean markdown if present
     content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-    // FIX 4: DEBUG LOG
-    console.log('\n=== ODDS PAYLOAD ===');
-    console.log(JSON.stringify(oddsData, null, 2));
 
     // Parse JSON
     const result = JSON.parse(content);
@@ -381,6 +471,7 @@ ${researchContext}`
     // Add metadata
     result.oddsPayload = oddsData;
     result.researchContext = researchContext;
+    result.deep_reasoning = deepReasoningText;  // NEW: Save reasoning text
     result.timestamp = new Date().toISOString();
     result.sport = sport === 'football' ? 'Football' : sport === 'basketball' ? 'NBA' : 'MLB';
     result.estimated_odds = !oddsData;
@@ -395,13 +486,14 @@ ${researchContext}`
     }
 
     console.log(`\n${'═'.repeat(60)}`);
-    console.log(`✅ ANÁLISIS COMPLETADO`);
+    console.log(`✅ ANÁLISIS 4-STEP COMPLETADO`);
     console.log(`📌 Best Pick: ${result.best_pick?.selection} en ${result.best_pick?.market}`);
     console.log(`💰 Odds: ${result.best_pick?.odds}`);
     console.log(`📈 Edge: ${result.best_pick?.edge_percentage}%`);
     console.log(`🎯 Confidence: ${result.best_pick?.confidence_score}`);
     console.log(`🏷️ Tier: ${result.best_pick?.tier}`);
     console.log(`📊 Data Quality: ${result.data_quality}`);
+    console.log(`🧠 Deep Reasoning: ${deepReasoningText.length} chars`);
     console.log(`${'═'.repeat(60)}\n`);
 
     return res.status(200).json(result);

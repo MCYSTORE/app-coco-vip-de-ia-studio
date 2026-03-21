@@ -208,6 +208,7 @@ export interface Prediction {
   oddsPayload?: any;
   fuentes_contexto?: string[];
   ajustes_aplicados?: string[];
+  deep_reasoning?: string;  // Deep reasoning from Step 3
   // Source tracking
   source?: 'manual' | 'daily_auto' | 'scanner';
   qualityTier?: 'A_PLUS' | 'B' | 'REJECTED';
