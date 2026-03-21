@@ -6,7 +6,11 @@
  * STEP 2: Perplexity (sonar-pro) - Web research
  * STEP 3: DeepSeek R1 - Free reasoning (NO JSON)
  * STEP 4: DeepSeek R1 - Format to JSON
+ * 
+ * Saves to Google Sheets automatically
  */
+
+import { saveAnalysis, isSheetsConfigured } from '../lib/sheets.service.ts';
 
 // ═══════════════════════════════════════════════════════════════
 // STEP 2: PERPLEXITY SYSTEM PROMPT (Extended)
@@ -495,6 +499,42 @@ ${deepReasoningText}`
     console.log(`📊 Data Quality: ${result.data_quality}`);
     console.log(`🧠 Deep Reasoning: ${deepReasoningText.length} chars`);
     console.log(`${'═'.repeat(60)}\n`);
+
+    // ═══════════════════════════════════════════════════════════════
+    // SAVE TO GOOGLE SHEETS (async, non-blocking)
+    // ═══════════════════════════════════════════════════════════════
+    const analysisId = crypto.randomUUID();
+    
+    if (isSheetsConfigured()) {
+      console.log('💾 Guardando análisis en Google Sheets...');
+      
+      // Extract league from match name or use default
+      const leagueMatch = matchName.match(/(?:La Liga|Premier League|Bundesliga|Serie A|Ligue 1|Champions|Europa|Copa)/i);
+      const league = leagueMatch ? leagueMatch[0] : 'Otro';
+      
+      // Save async without blocking response
+      saveAnalysis({
+        id: analysisId,
+        matchName: result.match || matchName,
+        sport: result.sport || 'Football',
+        league: league,
+        dataQuality: result.data_quality || 'media',
+        jsonResult: result,
+        researchA: researchContext.substring(0, 5000),  // Limit size
+        researchB: '',  // Could split research context here
+        deepThinking: deepReasoningText.substring(0, 10000),  // Limit size
+        modelAnalyst: 'deepseek-r1',
+        source: 'manual'
+      }).catch(err => {
+        console.error('⚠️ Error saving to Sheets (non-blocking):', err.message);
+      });
+    } else {
+      console.log('⚠️ Google Sheets not configured, skipping save');
+    }
+
+    // Add ID to result
+    result.id = analysisId;
+    result.sheets_saved = isSheetsConfigured();
 
     return res.status(200).json(result);
 
