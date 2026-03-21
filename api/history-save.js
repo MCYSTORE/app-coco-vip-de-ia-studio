@@ -4,7 +4,7 @@
  */
 
 // URL del Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxcWdq_8gRgF90qKo7NfKfkZvHeGnxeG1wL0-CDBdD6CHXv3Lf5wfU5lN4MyOJFnqgrww/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyrgvUtl8DVBJF_ncyTrFMdfBF0-z_QqeF5Qd-SpdmadATMLZf3dQLZZbJLkWlty39VQg/exec';
 
 export default async function handler(req, res) {
   // CORS
@@ -66,7 +66,8 @@ export default async function handler(req, res) {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-      }
+      },
+      redirect: 'follow'
     });
 
     const responseText = await response.text();
