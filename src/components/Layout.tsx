@@ -156,7 +156,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   };
 
   const tabs = [
-    { id: 'picks', label: 'Picks', icon: PicksIcon },
+    { id: 'picks', label: 'COCO VIP', icon: PicksIcon },
     { id: 'analysis', label: 'Analysis', icon: AnalysisIcon },
     { id: 'history', label: 'History', icon: HistoryIcon },
     { id: 'profile', label: 'Profile', icon: ProfileIcon },
