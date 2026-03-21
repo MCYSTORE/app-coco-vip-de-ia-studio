@@ -57,6 +57,125 @@ export interface DebateResult {
   conclusion: DebateConclusion;
 }
 
+// V2 Pipeline Market Analysis Types
+export interface MercadoResultado {
+  seleccion: string;
+  prob_estimada: number;
+  prob_implicita_normalizada?: number;
+  odds: number;
+  edge_percentage: number;
+  value_bet: boolean;
+  confidence_score: number;
+  analisis: string;
+}
+
+export interface MercadoTotal {
+  xg_o_pts_estimado?: number;
+  xg_estimado?: number;
+  seleccion: 'over' | 'under';
+  linea: number;
+  odds: number | null;
+  edge_percentage: number | null;
+  value_bet: boolean;
+  confidence_score: number;
+  analisis: string;
+}
+
+export interface MercadoBTTS {
+  aplica: boolean;
+  seleccion: 'yes' | 'no';
+  prob_btts_estimada: number;
+  odds: number | null;
+  edge_percentage: number | null;
+  value_bet: boolean;
+  confidence_score: number;
+  analisis: string;
+}
+
+export interface MercadoCorners {
+  aplica: boolean;
+  total_estimado: number;
+  tendencia: 'alta' | 'media' | 'baja';
+  linea: number | null;
+  seleccion: 'over' | 'under' | 'sin_cuota';
+  odds: number | null;
+  edge_percentage: number | null;
+  value_bet: boolean;
+  confidence_score: number;
+  analisis: string;
+}
+
+export interface MercadoHandicap {
+  aplica: boolean;
+  linea: number | null;
+  seleccion: 'home' | 'away' | null;
+  odds: number | null;
+  edge_percentage: number | null;
+  value_bet: boolean;
+  confidence_score: number;
+  analisis: string;
+}
+
+export interface ProyeccionFinal {
+  resultado_probable: string;
+  marcador_estimado: string;
+  rango_total: string;
+  btts_probable: boolean;
+  banker_double_viable: boolean;
+  banker_double_cuota_minima: number | null;
+  resumen: string;
+  mejor_pick_resumen?: {
+    market: string;
+    selection: string;
+    odds: number;
+    edge_percentage: number;
+    kelly_stake_units: number;
+  };
+}
+
+export interface MercadosCompletos {
+  resultado: MercadoResultado;
+  total: MercadoTotal;
+  ambos_anotan: MercadoBTTS;
+  corners: MercadoCorners;
+  handicap: MercadoHandicap;
+  proyeccion_final: ProyeccionFinal;
+}
+
+export interface ValuePick {
+  market: string;
+  selection: string;
+  odds: number;
+  edge_percentage: number;
+  confidence_score: number;
+  tier: 'A+' | 'B';
+}
+
+export interface BestPickAnalysis {
+  pros: string[];
+  cons: string[];
+  conclusion: string;
+}
+
+export interface StatsHighlights {
+  metric_1: string;
+  metric_2: string;
+  metric_3: string;
+}
+
+export interface BestPick {
+  market: string;
+  selection: string;
+  odds: number;
+  edge_percentage: number;
+  confidence_score: number;
+  tier: 'A+' | 'B';
+  kelly_stake_units: number;
+  value_bet: boolean;
+  analysis: BestPickAnalysis;
+  stats_highlights?: StatsHighlights;
+}
+
 export interface Prediction {
   id: string;
   userId?: string;
@@ -76,6 +195,19 @@ export interface Prediction {
   league?: string;
   isLive?: boolean;
   hasRealStats?: boolean;
+  // V2 Pipeline Fields
+  dataQuality?: 'alta' | 'media' | 'baja';
+  estimatedOdds?: boolean;
+  kellyStake?: number;
+  valueBet?: boolean;
+  tier?: 'A+' | 'B';
+  best_pick?: BestPick;
+  mercados_completos?: MercadosCompletos;
+  picks_con_value?: ValuePick[];
+  researchContext?: string;
+  oddsPayload?: any;
+  fuentes_contexto?: string[];
+  ajustes_aplicados?: string[];
   // Source tracking
   source?: 'manual' | 'daily_auto' | 'scanner';
   qualityTier?: 'A_PLUS' | 'B' | 'REJECTED';
