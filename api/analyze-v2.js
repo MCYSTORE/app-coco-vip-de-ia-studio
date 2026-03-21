@@ -5,7 +5,7 @@
  * 
  * STEP 1: The Odds API      → Cuotas en tiempo real + probabilidades normalizadas
  * STEP 2: Perplexity Sonar  → Investigación web OSINT estructurada
- * STEP 3: Claude Sonnet 4   → Razonamiento profundo de 5 secciones
+ * STEP 3: Claude Sonnet 4.6 → Razonamiento profundo de 5 secciones
  * STEP 4: Grok 4.1 Fast     → Formateo JSON para UI
  * 
  * TODAS LAS RESPUESTAS VISIBLES EN ESPAÑOL NEUTRO
@@ -342,7 +342,7 @@ async function runPerplexityResearch(matchName, sport, openrouterKey) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STEP 3: CLAUDE SONNET 4 - RAZONAMIENTO PROFUNDO
+// STEP 3: CLAUDE SONNET 4.6 - RAZONAMIENTO PROFUNDO
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CLAUDE_SYSTEM_PROMPT = `🚨 INSTRUCCIONES CRÍTICAS DE IDIOMA:
@@ -395,7 +395,7 @@ Estructura tu razonamiento en 5 secciones numeradas:
 - NUNCA uses valores mayores a 1.0 para confianza.`;
 
 async function runClaudeReasoning(matchName, sport, oddsPayload, researchContext, openrouterKey) {
-  console.log('\n🧠 STEP 3: Claude Sonnet 4 razonando en profundidad...');
+  console.log('\n🧠 STEP 3: Claude Sonnet 4.6 razonando en profundidad...');
   
   const oddsText = oddsPayload.estimated_odds 
     ? 'CUOTAS ESTIMADAS (no disponibles en tiempo real). Basa tus estimaciones en el contexto del partido.'
@@ -414,7 +414,7 @@ Totales: Línea ${oddsPayload.totals?.line || 'N/A'} | Over ${oddsPayload.totals
         'X-Title': 'Coco VIP Reasoning'
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-sonnet-4',
+        model: 'anthropic/claude-sonnet-4.6',
         messages: [
           { role: 'system', content: CLAUDE_SYSTEM_PROMPT },
           { 
@@ -727,7 +727,7 @@ export default async function handler(req, res) {
     const researchContext = await runPerplexityResearch(matchName, sport, OPENROUTER_API_KEY);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 3: CLAUDE SONNET 4
+    // STEP 3: CLAUDE SONNET 4.6
     // ═══════════════════════════════════════════════════════════════════════════
     const deepReasoning = await runClaudeReasoning(matchName, sport, oddsPayload, researchContext, OPENROUTER_API_KEY);
 
