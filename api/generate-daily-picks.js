@@ -79,6 +79,43 @@ const DISCARD_REASONS = {
 };
 
 // =====================================================
+// SEASON LOGIC
+// =====================================================
+
+// Ligas que usan temporada por año calendario (no cruzan años)
+const CALENDAR_YEAR_LEAGUES = [
+  71,   // Brasileirao
+  128,  // Argentina Liga Profesional
+  262,  // Liga MX
+  253   // MLS
+];
+
+/**
+ * Determina la temporada correcta según la liga y fecha
+ * - Ligas europeas: temporada cruza años (ej: 2025-26 usa season=2025)
+ * - Ligas América: temporada por año calendario (ej: 2026 usa season=2026)
+ */
+function getSeasonForLeague(leagueId, dateStr) {
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // 1-12
+  
+  // Ligas de América usan año calendario
+  if (CALENDAR_YEAR_LEAGUES.includes(leagueId)) {
+    return year;
+  }
+  
+  // Ligas europeas cruzan años (agosto-mayo)
+  // Si mes >= 8 (ago-dic): temporada empieza este año
+  // Si mes < 8 (ene-jul): temporada empezó el año anterior
+  if (month >= 8) {
+    return year;
+  } else {
+    return year - 1;
+  }
+}
+
+// =====================================================
 // CACHES & STATE
 // =====================================================
 
@@ -559,8 +596,10 @@ async function getCorners(homeId, awayId, leagueId, season) {
 // BUILD MATCH DATA OBJECT (EXACT STRUCTURE)
 // =====================================================
 
-async function buildMatchDataObject(fixture, season) {
-  console.log(`   📊 Building: ${fixture.home_name} vs ${fixture.away_name}`);
+async function buildMatchDataObject(fixture) {
+  // Determine correct season based on league and date
+  const season = getSeasonForLeague(fixture.league_id, fixture.kickoff_utc);
+  console.log(`   📊 Building: ${fixture.home_name} vs ${fixture.away_name} (Season: ${season})`);
   
   const [standings, homeStats, awayStats, homeForm, awayForm, h2h, odds, prediction, injuries] = await Promise.all([
     getStandings(fixture.league_id, season),
@@ -1265,7 +1304,7 @@ export default async function handler(req, res) {
         break;
       }
       
-      const matchData = await buildMatchDataObject(fixture, season);
+      const matchData = await buildMatchDataObject(fixture);
       
       // Validate: 2+ missing = discard
       const validation = validateMatchData(matchData);
