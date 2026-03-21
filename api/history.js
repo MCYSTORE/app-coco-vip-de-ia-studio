@@ -3,7 +3,7 @@
  * GET: Retrieve analysis history from Google Sheets
  */
 
-import { getHistory, getHistoryStats, getHistoryById, isSheetsConfigured } from '../lib/sheets.service.ts';
+import { getHistory, getHistoryStats, getHistoryById, isSheetsConfigured } from '../lib/sheets.service.js';
 
 export default async function handler(req, res) {
   // CORS

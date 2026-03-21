@@ -12,9 +12,8 @@
  */
 
 const SPORTS_API_KEY = process.env.SPORTS_API_KEY;
-const OPENROUTERFREE_API_KEY = process.env.OPENROUTERFREE_API_KEY;
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.OPENROUTERFREE_API_KEY;
+const GOOGLE_SHEETS_URL = process.env.GOOGLE_SHEETS_URL;
 
 // =====================================================
 // CONFIGURATION
@@ -180,19 +179,25 @@ function logDiscarded(match, leagueId, reason, extra = {}) {
 }
 
 async function saveDiscarded() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || discardedPicks.length === 0) return;
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/picks_discarded`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify(discardedPicks)
-    });
-  } catch (e) {}
+  // Save discarded picks to Google Sheets for logging
+  if (discardedPicks.length > 0) {
+    const entries = discardedPicks.map(p => ({
+      date: p.date,
+      sport: p.sport || 'football',
+      match_id: p.match_id || `discarded-${Date.now()}`,
+      league: p.league,
+      reason: p.reason,
+      details: JSON.stringify(p.extra || {}),
+      created_at: new Date().toISOString()
+    }));
+    
+    try {
+      await writeToCache(entries);
+      console.log(`   📝 Saved ${entries.length} discarded picks to Google Sheets`);
+    } catch (e) {
+      console.log(`   ⚠️ Could not save discarded picks to Google Sheets:`, e.message);
+    }
+  }
 }
 
 // =====================================================
@@ -1227,48 +1232,45 @@ function selectBestPicks(llmResults, matchDataObjects) {
 }
 
 // =====================================================
-// SAVE TO SUPABASE
+// SAVE TO GOOGLE SHEETS
 // =====================================================
 
 async function savePicks(picks) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || picks.length === 0) return;
+  if (!GOOGLE_SHEETS_URL || picks.length === 0) return;
   
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/predictions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'Prefer': 'return=representation'
-      },
-      body: JSON.stringify(picks.map(p => ({
-        sport: 'football',
-        match_name: `${p.home_team} vs ${p.away_team}`,
-        date: p.kickoff.split('T')[0],
-        league: p.league,
-        home_team: p.home_team,
-        away_team: p.away_team,
-        kickoff: p.kickoff,
-        market: p.market,
-        selection: p.selection,
-        odds: p.odds,
+    // Format picks for Google Sheets cache
+    const cacheEntries = picks.map(p => formatCacheEntry({
+      sport: 'football',
+      home_team: p.home_team,
+      away_team: p.away_team,
+      league: p.league,
+      date: p.kickoff.split('T')[0],
+      kickoff: p.kickoff,
+      market_type: p.market,
+      selection: p.selection,
+      odds: p.odds,
+      implied_prob: p.implied_prob,
+      stats_json: {
         estimated_prob: p.estimated_prob,
-        implied_prob: p.implied_prob,
         edge_percent: p.edge_percent,
         confidence: p.confidence,
         quality_tier: p.quality_tier,
-        analysis_text: p.analysis,
+        analysis: p.analysis,
         risk_factors: p.risk_factors,
-        supporting_factors: p.supporting_factors,
-        is_official: true,
-        status: 'pending',
-        source: 'daily_auto'
-      })))
-    });
-    console.log(`✅ Saved ${picks.length} picks`);
+        supporting_factors: p.supporting_factors
+      }
+    }));
+    
+    const result = await writeToCache(cacheEntries);
+    
+    if (result.success) {
+      console.log(`✅ Saved ${picks.length} picks to Google Sheets`);
+    } else {
+      console.log(`⚠️ Google Sheets save returned: ${result.reason || 'unknown error'}`);
+    }
   } catch (e) {
-    console.error("Save error:", e.message);
+    console.error("Google Sheets save error:", e.message);
   }
 }
 

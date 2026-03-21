@@ -3,7 +3,7 @@
  * POST: Update analysis result (won/lost/void)
  */
 
-import { updateResult, getHistoryById, isSheetsConfigured } from '../lib/sheets.service.ts';
+import { updateResult, getHistoryById, isSheetsConfigured } from '../lib/sheets.service.js';
 
 export default async function handler(req, res) {
   // CORS

@@ -3,7 +3,7 @@
  * POST: Save new analysis to Google Sheets
  */
 
-import { saveAnalysis, isSheetsConfigured } from '../lib/sheets.service.ts';
+import { saveAnalysis, isSheetsConfigured } from '../lib/sheets.service.js';
 
 export default async function handler(req, res) {
   // CORS

@@ -38,8 +38,13 @@ export default async function handler(req, res) {
       }
 
       case 'top-picks': {
-        const { default: topPicks } = await import('./top-picks.js');
-        return topPicks(req, res);
+        const { default: topPicks } = await import('./google-sheets.js');
+        return fetchFromCache({ date: today }).then(entries => {
+          const picks = entries.map(entry => parseCacheEntry(entry));
+          return res.json(picks);
+        }).catch(err => {
+          return res.json([]);
+        });
       }
 
       case 'scanner': {
