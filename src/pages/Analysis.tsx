@@ -541,10 +541,14 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
     }
   };
 
+  const [savingToSheets, setSavingToSheets] = useState(false);
+  const [sheetsSaveResult, setSheetsSaveResult] = useState<{ success: boolean; message: string } | null>(null);
+
   const saveToHistory = async () => {
     if (!result) return;
     
     try {
+      // 1. Guardar en localStorage (copia local rápida)
       const stored = localStorage.getItem(STORAGE_KEY);
       const existing: Prediction[] = stored ? JSON.parse(stored) : [];
       
@@ -555,9 +559,51 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
       };
       
       localStorage.setItem(STORAGE_KEY, JSON.stringify([newPrediction, ...existing]));
+      
+      // 2. Guardar en Google Sheets (persistencia para seguimiento)
+      setSavingToSheets(true);
+      setSheetsSaveResult(null);
+      
+      try {
+        const response = await fetch('/api/history-save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            result: result,
+            userContext: formData.user_context
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          setSheetsSaveResult({ 
+            success: true, 
+            message: '✅ Guardado en Google Sheets para seguimiento' 
+          });
+          console.log('✅ Análisis guardado en Google Sheets:', data.id);
+        } else {
+          setSheetsSaveResult({ 
+            success: false, 
+            message: data.configured === false 
+              ? '⚠️ Google Sheets no configurado - solo guardado local'
+              : '⚠️ Error al guardar en Sheets - solo guardado local'
+          });
+          console.log('⚠️ No se pudo guardar en Google Sheets:', data.error);
+        }
+      } catch (sheetsError) {
+        console.error("Error saving to Google Sheets:", sheetsError);
+        setSheetsSaveResult({ 
+          success: false, 
+          message: '⚠️ Error de conexión - solo guardado local' 
+        });
+      }
+      
       setSaved(true);
     } catch (error) {
       console.error("Error saving to history:", error);
+    } finally {
+      setSavingToSheets(false);
     }
   };
 
@@ -1072,16 +1118,33 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
               {!saved ? (
                 <button
                   onClick={saveToHistory}
-                  className="mt-6 w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                  disabled={savingToSheets}
+                  className="mt-6 w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
                   style={{ backgroundColor: 'var(--color-success)', color: 'white' }}
                 >
-                  <TrendingUp className="w-4 h-4" />
-                  Guardar en Historial
+                  {savingToSheets ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Guardando en Google Sheets...
+                    </>
+                  ) : (
+                    <>
+                      <TrendingUp className="w-4 h-4" />
+                      Guardar en Historial (Google Sheets)
+                    </>
+                  )}
                 </button>
               ) : (
-                <div className="mt-6 w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 border" style={{ backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success)', borderColor: 'rgba(22,163,74,0.2)' }}>
-                  <Verified className="w-4 h-4" />
-                  Guardado en tu historial
+                <div className="mt-6 space-y-2">
+                  <div className="w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 border" style={{ backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success)', borderColor: 'rgba(22,163,74,0.2)' }}>
+                    <Verified className="w-4 h-4" />
+                    Guardado en historial local
+                  </div>
+                  {sheetsSaveResult && (
+                    <div className={`w-full py-2 px-4 rounded-xl text-sm text-center ${sheetsSaveResult.success ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                      {sheetsSaveResult.message}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
