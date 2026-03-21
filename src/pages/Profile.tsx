@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { User as UserIcon, Mail, Shield, Settings, Target, Flame, DollarSign, BarChart3, Crown, Star, Trash2, Wallet, Info, Save, Trophy, RefreshCw, Database, Clock, CheckCircle, XCircle, Sun, Moon } from 'lucide-react';
+import { User as UserIcon, Mail, Shield, Settings, Target, Flame, DollarSign, BarChart3, Crown, Star, Trash2, Wallet, Info, Save, Trophy, RefreshCw, Database, Clock, CheckCircle, XCircle, Sun, Moon, LogOut } from 'lucide-react';
 import { Prediction, UserStats, getBankroll, saveBankroll, DEFAULT_BANKROLL } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const STORAGE_KEY = 'coco_vip_predictions';
 
@@ -15,6 +16,7 @@ interface CacheStatus {
 }
 
 export default function Profile() {
+  const { user, signOut } = useAuth();
   const [stats, setStats] = useState<UserStats>({
     totalPredictions: 0,
     won: 0,
@@ -203,8 +205,8 @@ export default function Profile() {
             <Crown className="w-4 h-4 text-white" />
           </div>
         </div>
-        <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Usuario Coco</h2>
-        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Modo Local</p>
+        <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>{user?.email?.split('@')[0] || 'Usuario'}</h2>
+        <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>{user?.email || 'Modo Local'}</p>
         <div 
           className="mt-2 px-3 py-1 rounded-full"
           style={{ border: '1px solid var(--color-accent-gold)' }}
@@ -215,6 +217,16 @@ export default function Profile() {
           </span>
         </div>
       </div>
+
+      {/* Logout Button */}
+      <button
+        onClick={signOut}
+        className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+        style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-danger)', border: '1px solid var(--color-danger)' }}
+      >
+        <LogOut className="w-5 h-5" />
+        Cerrar Sesión
+      </button>
 
       {/* Stats Overview - Carbon card */}
       <div className="carbon-card rounded-3xl p-6 shadow-lg">
