@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Calendar, Loader2, TrendingUp, Verified, Info, Database, ThumbsUp, ThumbsDown, Scale, ChevronDown, ChevronUp, Target, Activity, BarChart3, Zap } from 'lucide-react';
+import { Search, Calendar, Loader2, TrendingUp, Verified, Info, Database, ThumbsUp, ThumbsDown, Scale, ChevronDown, ChevronUp, Target, Activity, BarChart3, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Prediction, DebateResult, XGMatchStats } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 const STORAGE_KEY = 'coco_vip_predictions';
 
-// Loading messages for the automatic analysis
+// Loading messages for the automatic analysis (V1)
 const LOADING_MESSAGES = [
   { text: "Buscando datos del partido...", icon: "🔍" },
   { text: "Procesando estadísticas...", icon: "📊" },
   { text: "Analizando con IA...", icon: "🤖" }
+];
+
+// V2 Pipeline Loading Messages (AI-Driven 3 Steps)
+const LOADING_MESSAGES_V2 = [
+  { text: "Buscando cuotas en tiempo real...", icon: "🔍", progress: 15 },
+  { text: "Investigando la web (Lesiones, xG, Noticias)...", icon: "📡", progress: 45 },
+  { text: "DeepSeek calculando Edge y valor matemático...", icon: "🤖", progress: 80 }
 ];
 
 // xG Stats Section Component
@@ -344,6 +351,12 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
   const [result, setResult] = useState<Prediction | null>(null);
   const [saved, setSaved] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  
+  // V2 Pipeline States
+  const [useV2, setUseV2] = useState(true); // Default to V2 pipeline
+  const [v2Progress, setV2Progress] = useState(0);
+  const [v2Warnings, setV2Warnings] = useState<string[]>([]);
+  const [v2Step, setV2Step] = useState(0);
 
   // Update form when initialMatchName changes
   useEffect(() => {
@@ -368,6 +381,14 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
     setLoadingStep(0);
     setResult(null);
     setSaved(false);
+    setV2Warnings([]);
+    setV2Progress(0);
+    setV2Step(0);
+
+    // Use V2 pipeline if enabled
+    if (useV2) {
+      return handleAnalyzeV2();
+    }
 
     try {
       const response = await fetch('/api/analyze', {
@@ -417,6 +438,102 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
       console.error("Analysis error:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // V2 Pipeline Analysis - AI-Driven 3 Steps
+  const handleAnalyzeV2 = async () => {
+    if (!formData.match_name) return;
+
+    // Animate through V2 loading steps
+    const stepTimer = setInterval(() => {
+      setV2Step(prev => {
+        if (prev < LOADING_MESSAGES_V2.length - 1) {
+          return prev + 1;
+        }
+        return prev;
+      });
+      setV2Progress(prev => {
+        if (prev < 80) {
+          return prev + 15;
+        }
+        return prev;
+      });
+    }, 2000);
+
+    try {
+      const response = await fetch('/api/analyze-v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchName: formData.match_name,
+          sport: formData.sport
+        })
+      });
+
+      clearInterval(stepTimer);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en el análisis');
+      }
+
+      const data = await response.json();
+
+      // Extract warnings from response headers or data
+      const warnings: string[] = [];
+      if (data.oddsPayload === null) {
+        warnings.push('⚠️ Cuotas no disponibles, usando estimaciones');
+      }
+      if (!data.researchContext || data.researchContext === 'Sin contexto web disponible.') {
+        warnings.push('⚠️ Búsqueda web fallida, análisis limitado');
+      }
+      setV2Warnings(warnings);
+      setV2Progress(100);
+
+      // Normalize V2 result to Prediction format
+      const normalizedResult: Prediction = {
+        id: Date.now().toString(),
+        matchName: data.match || formData.match_name,
+        sport: data.sport,
+        bestMarket: data.best_pick?.market || 'Análisis AI',
+        selection: data.best_pick?.selection || '',
+        bookmaker: 'AI Pipeline',
+        odds: data.best_pick?.odds || 1.85,
+        edgePercent: data.best_pick?.edge_percentage || 0,
+        confidence: Math.round((data.best_pick?.confidence_score || 0.5) * 10),
+        analysisText: data.best_pick?.analysis?.conclusion || data.mercados_completos?.proyeccion_final?.resumen || 'Análisis completado',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        hasRealStats: data.data_quality === 'alta',
+        openingOdd: data.best_pick?.odds || 1.85,
+        openingOddTimestamp: new Date().toISOString(),
+        currentOdd: data.best_pick?.odds || 1.85,
+        currentOddTimestamp: new Date().toISOString(),
+        lineMovementPercent: 0,
+        lineMovementDirection: 'stable',
+        // V2 specific fields
+        supporting_factors: data.supporting_factors || data.best_pick?.analysis?.pros || [],
+        risk_factors: data.risk_factors || data.best_pick?.analysis?.cons || [],
+        dataQuality: data.data_quality,
+        estimatedOdds: data.estimated_odds,
+        kellyStake: data.best_pick?.kelly_stake_units,
+        valueBet: data.best_pick?.value_bet,
+        tier: data.best_pick?.tier,
+        mercados_completos: data.mercados_completos,
+        picks_con_value: data.picks_con_value,
+        fuentes_contexto: data.fuentes_contexto,
+        ajustes_aplicados: data.ajustes_aplicados
+      };
+
+      setResult(normalizedResult);
+    } catch (error: any) {
+      console.error("V2 Analysis error:", error);
+      setV2Warnings([`❌ Error: ${error.message}`]);
+    } finally {
+      clearInterval(stepTimer);
+      setLoading(false);
+      setV2Progress(100);
     }
   };
 
@@ -552,6 +669,49 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
           </AnimatePresence>
         </div>
 
+        {/* V2 Pipeline Toggle */}
+        <div className="flex items-center justify-between p-4 rounded-xl" style={{ backgroundColor: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: useV2 ? 'linear-gradient(to right, var(--color-accent-primary), var(--color-accent-secondary))' : 'var(--color-bg-secondary)' }}>
+              <span className="text-lg">🧠</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold" style={{ color: 'var(--color-text-primary)' }}>Pipeline AI v2</p>
+              <p className="text-[10px]" style={{ color: 'var(--color-text-secondary)' }}>Perplexity + DeepSeek R1</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setUseV2(!useV2)}
+            className="relative w-14 h-7 rounded-full transition-colors"
+            style={{ backgroundColor: useV2 ? 'var(--color-accent-primary)' : 'var(--color-bg-secondary)' }}
+          >
+            <motion.div
+              className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow"
+              animate={{ left: useV2 ? '1.75rem' : '0.25rem' }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          </button>
+        </div>
+
+        {/* V2 Warnings */}
+        <AnimatePresence>
+          {v2Warnings.length > 0 && useV2 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-2"
+            >
+              {v2Warnings.map((warning, idx) => (
+                <div key={idx} className="px-4 py-2 rounded-xl text-sm flex items-center gap-2" style={{ backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}>
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>{warning}</span>
+                </div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Analyze Button */}
         <button
           onClick={handleAnalyze}
@@ -567,14 +727,24 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
             >
               <Loader2 className="w-5 h-5 animate-spin" />
               <span className="flex items-center gap-2">
-                <span>{LOADING_MESSAGES[loadingStep].icon}</span>
-                <span>{LOADING_MESSAGES[loadingStep].text}</span>
+                {useV2 ? (
+                  <>
+                    <span>{LOADING_MESSAGES_V2[v2Step]?.icon || '🔍'}</span>
+                    <span>{LOADING_MESSAGES_V2[v2Step]?.text || 'Analizando...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{LOADING_MESSAGES[loadingStep].icon}</span>
+                    <span>{LOADING_MESSAGES[loadingStep].text}</span>
+                  </>
+                )}
               </span>
             </motion.div>
           ) : (
             <>
               <Zap className="w-5 h-5" />
-              Analizar Value Bet
+              {useV2 ? 'Analizar con AI Pipeline v2' : 'Analizar Value Bet'}
+              {useV2 && <span className="text-xs ml-1" style={{ color: 'var(--color-accent-secondary)' }}>(3 pasos)</span>}
             </>
           )}
         </button>

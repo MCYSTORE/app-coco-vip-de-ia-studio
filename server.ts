@@ -1186,6 +1186,46 @@ IMPORTANTE:
   });
 
   // =====================================================
+  // AI-DRIVEN PIPELINE v2 - 3 Steps Analysis
+  // Step 1: The Odds API (real odds)
+  // Step 2: Perplexity (via OpenRouter) - Research Agent
+  // Step 3: DeepSeek R1 (via OpenRouter) - Quant/Sniper Agent
+  // =====================================================
+
+  app.post("/api/analyze-v2", async (req, res) => {
+    const { matchName, sport = 'football' } = req.body;
+    
+    if (!matchName) {
+      return res.status(400).json({ error: 'matchName is required' });
+    }
+
+    try {
+      // Dynamic import for the analysis service
+      const { analyzeMatch, saveAnalysisToSheets } = await import('./lib/analyzeMatch.js');
+      
+      const result = await analyzeMatch({
+        matchName,
+        sport: sport as 'football' | 'basketball' | 'baseball'
+      });
+
+      // Save to Google Sheets (non-blocking)
+      saveAnalysisToSheets(result).catch(err => {
+        console.error('Failed to save analysis to sheets:', err);
+      });
+
+      return res.status(200).json(result);
+    } catch (error: any) {
+      console.error("Analysis v2 Error:", error);
+      return res.status(500).json({
+        error: "Analysis failed",
+        message: error.message,
+        match: matchName,
+        sport
+      });
+    }
+  });
+
+  // =====================================================
   // Vite middleware for development
   // =====================================================
 

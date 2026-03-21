@@ -100,6 +100,26 @@ export interface Prediction {
   debate?: DebateResult;
   // xG Stats (football only)
   xgStats?: XGMatchStats;
+  // V2 Pipeline Fields
+  edge_detected?: boolean;
+  quality_tier?: 'A_PLUS' | 'B' | 'REJECTED';
+  implied_prob?: number;
+  estimated_prob?: number;
+  risk_factors?: string[];
+  supporting_factors?: string[];
+  recommendation?: 'apostar' | 'pasar' | 'reducir stake';
+  valid?: boolean;
+  reason?: string;
+  autoContext?: string;
+  dataQuality?: 'alta' | 'media' | 'baja';
+  estimatedOdds?: boolean;
+  kellyStake?: number;
+  valueBet?: boolean;
+  tier?: 'A+' | 'B';
+  mercados_completos?: any;
+  picks_con_value?: any[];
+  fuentes_contexto?: string[];
+  ajustes_aplicados?: string[];
 }
 
 // Helper function to find best odd from array
