@@ -29,10 +29,23 @@ export default function App() {
     }
   }, [activeTab]);
 
+  // Handle navigation from sniper picks
+  const handleNavigate = (tab: string) => {
+    setActiveTab(tab);
+  };
+
+  // Handle analyze match from sniper picks
+  const handleAnalyzeMatch = (matchName: string) => {
+    if (matchName) {
+      setScannerMatchName(matchName);
+    }
+    setActiveTab('analysis');
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'picks':
-        return <Picks />;
+        return <Picks onNavigate={handleNavigate} onAnalyzeMatch={handleAnalyzeMatch} />;
       case 'analysis':
         return <Analysis initialMatchName={scannerMatchName} />;
       case 'history':
@@ -40,7 +53,7 @@ export default function App() {
       case 'profile':
         return <Profile />;
       default:
-        return <Picks />;
+        return <Picks onNavigate={handleNavigate} onAnalyzeMatch={handleAnalyzeMatch} />;
     }
   };
 

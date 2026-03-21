@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import PickCard from '../components/PickCard';
+import SniperPicksModal from '../components/SniperPicksModal';
 import { Prediction } from '../types';
 import { Loader2, TrendingUp, Sparkles, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PicksProps {
   onNavigate?: (tab: string) => void;
+  onAnalyzeMatch?: (matchName: string) => void;
 }
 
-export default function Picks({ onNavigate }: PicksProps) {
+export default function Picks({ onNavigate, onAnalyzeMatch }: PicksProps) {
   const [picks, setPicks] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [generateResult, setGenerateResult] = useState<{ success: boolean; message: string } | null>(null);
+  
+  // Sniper Modal State
+  const [sniperModalOpen, setSniperModalOpen] = useState(false);
+  const [selectedSport, setSelectedSport] = useState<'football' | 'basketball' | 'baseball'>('football');
 
   const fetchPicks = async () => {
     setLoading(true);
@@ -31,62 +35,17 @@ export default function Picks({ onNavigate }: PicksProps) {
     }
   };
 
-  const generatePicksForSport = async (sport: 'football' | 'basketball' | 'baseball') => {
-    setGenerating(sport);
-    setGenerateResult(null);
-    
-    const endpoints: Record<string, string> = {
-      football: '/api/generate-daily-picks',
-      basketball: '/api/generate-nba-picks',
-      baseball: '/api/generate-baseball-picks'
-    };
-    
-    const sportNames: Record<string, string> = {
-      football: 'Fútbol',
-      basketball: 'NBA',
-      baseball: 'MLB'
-    };
-    
-    try {
-      const response = await fetch(endpoints[sport], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok) {
-        if (data.message && data.picks_generated === 0) {
-          setGenerateResult({
-            success: false,
-            message: `${sportNames[sport]}: ${data.message}`
-          });
-        } else if (data.picks_generated > 0) {
-          setGenerateResult({
-            success: true,
-            message: `¡${data.picks_generated} pick${data.picks_generated > 1 ? 's' : ''} de ${sportNames[sport]} generados!`
-          });
-        } else {
-          setGenerateResult({
-            success: false,
-            message: `${sportNames[sport]}: No se encontraron picks de calidad`
-          });
-        }
-        await fetchPicks();
-      } else {
-        setGenerateResult({
-          success: false,
-          message: data.error || `Error al generar picks de ${sportNames[sport]}`
-        });
-      }
-    } catch (error: any) {
-      setGenerateResult({
-        success: false,
-        message: error.message || 'Error de conexión'
-      });
-    } finally {
-      setGenerating(null);
+  const openSniperModal = (sport: 'football' | 'basketball' | 'baseball') => {
+    setSelectedSport(sport);
+    setSniperModalOpen(true);
+  };
+
+  const handleAnalyzeFromSniper = (matchName: string) => {
+    if (onAnalyzeMatch) {
+      onAnalyzeMatch(matchName);
+    }
+    if (onNavigate) {
+      onNavigate('analysis');
     }
   };
 
@@ -127,8 +86,7 @@ export default function Picks({ onNavigate }: PicksProps) {
         {/* Fútbol Card */}
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={() => generatePicksForSport('football')}
-          disabled={generating !== null}
+          onClick={() => openSniperModal('football')}
           className="w-full rounded-[20px] overflow-hidden relative"
           style={{ 
             height: '110px',
@@ -165,20 +123,12 @@ export default function Picks({ onNavigate }: PicksProps) {
             {/* Arrow */}
             <span className="text-3xl text-white/60">›</span>
           </div>
-          
-          {/* Loading indicator */}
-          {generating === 'football' && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-[20px]">
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
-            </div>
-          )}
         </motion.button>
 
         {/* NBA Card */}
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={() => generatePicksForSport('basketball')}
-          disabled={generating !== null}
+          onClick={() => openSniperModal('basketball')}
           className="w-full rounded-[20px] overflow-hidden relative"
           style={{ 
             height: '110px',
@@ -215,20 +165,12 @@ export default function Picks({ onNavigate }: PicksProps) {
             {/* Arrow */}
             <span className="text-3xl text-white/60">›</span>
           </div>
-          
-          {/* Loading indicator */}
-          {generating === 'basketball' && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-[20px]">
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
-            </div>
-          )}
         </motion.button>
 
         {/* MLB Card */}
         <motion.button
           whileTap={{ scale: 0.98 }}
-          onClick={() => generatePicksForSport('baseball')}
-          disabled={generating !== null}
+          onClick={() => openSniperModal('baseball')}
           className="w-full rounded-[20px] overflow-hidden relative"
           style={{ 
             height: '110px',
@@ -265,33 +207,8 @@ export default function Picks({ onNavigate }: PicksProps) {
             {/* Arrow */}
             <span className="text-3xl text-white/60">›</span>
           </div>
-          
-          {/* Loading indicator */}
-          {generating === 'baseball' && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-[20px]">
-              <Loader2 className="w-6 h-6 text-white animate-spin" />
-            </div>
-          )}
         </motion.button>
       </div>
-
-      {/* Generate Result Message */}
-      <AnimatePresence>
-        {generateResult && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className={`p-3 rounded-xl text-sm ${
-              generateResult.success 
-                ? 'bg-green-500/10 text-green-500 border border-green-500/20' 
-                : 'bg-red-500/10 text-red-500 border border-red-500/20'
-            }`}
-          >
-            {generateResult.message}
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Last Update */}
       {lastUpdate && (
@@ -324,10 +241,10 @@ export default function Picks({ onNavigate }: PicksProps) {
               {!hasLoaded ? (
                 <>
                   <p className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                    Selecciona un deporte para analizar
+                    Selecciona un deporte para ver picks
                   </p>
                   <p className="text-sm mt-2 max-w-xs mx-auto" style={{ color: 'var(--color-text-secondary)' }}>
-                    Pulsa uno de los botones de arriba para generar picks automáticamente con IA.
+                    Pulsa una tarjeta para ver los picks sniper del día
                   </p>
                 </>
               ) : (
@@ -355,6 +272,14 @@ export default function Picks({ onNavigate }: PicksProps) {
           )}
         </motion.div>
       </AnimatePresence>
+
+      {/* Sniper Picks Modal */}
+      <SniperPicksModal
+        isOpen={sniperModalOpen}
+        onClose={() => setSniperModalOpen(false)}
+        sport={selectedSport}
+        onAnalyzeMatch={handleAnalyzeFromSniper}
+      />
     </div>
   );
 }
