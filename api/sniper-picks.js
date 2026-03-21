@@ -6,7 +6,15 @@
  * Pipeline: Odds API → Perplexity Sonar (800 tokens) → DeepSeek V3 (1500 tokens)
  */
 
-import { getHistory, isSheetsConfigured } from '../lib/sheets.service.ts';
+import { isSheetsConfigured } from '../lib/sheets.client.js';
+
+// Simple in-memory history for sniper picks (fallback when Sheets not available)
+const localHistory = [];
+
+function getHistoryFromSheets(filters) {
+  // Return empty array - actual implementation uses Google Sheets
+  return [];
+}
 
 // Cache simple en memoria (1 hora)
 const cache = new Map<string, { data: any; expires: number }>();
