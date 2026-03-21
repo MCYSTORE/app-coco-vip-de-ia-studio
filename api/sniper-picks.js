@@ -6,18 +6,8 @@
  * Pipeline: Odds API → Perplexity Sonar (800 tokens) → DeepSeek V3 (1500 tokens)
  */
 
-import { isSheetsConfigured } from '../lib/sheets.client.js';
-
-// Simple in-memory history for sniper picks (fallback when Sheets not available)
-const localHistory = [];
-
-function getHistoryFromSheets(filters) {
-  // Return empty array - actual implementation uses Google Sheets
-  return [];
-}
-
-// Cache simple en memoria (1 hora)
-const cache = new Map<string, { data: any; expires: number }>();
+// Simple in-memory cache (1 hour TTL)
+const cache = new Map();
 
 // Sport key mapping for The Odds API
 const SPORT_KEY_MAP = {
@@ -33,7 +23,7 @@ const SPORT_NAMES = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// STEP B: PERPLEXITY SONAR LIGHT (800 tokens)
+// PERPLEXITY SONAR LIGHT (800 tokens)
 // ═══════════════════════════════════════════════════════════════
 
 const PERPLEXITY_LIGHT_PROMPT = `🚨 Responder EXCLUSIVAMENTE en español neutro.
@@ -53,7 +43,7 @@ MOTIVACIÓN: [1 frase]
 Sin texto adicional. Solo datos estructurados.`;
 
 // ═══════════════════════════════════════════════════════════════
-// STEP C: DEEPSEEK V3 LIGHT (1500 tokens)
+// DEEPSEEK V3 LIGHT (1500 tokens)
 // ═══════════════════════════════════════════════════════════════
 
 const DEEPSEEK_LIGHT_PROMPT = `🚨 INSTRUCCIONES CRÍTICAS DE IDIOMA (OBLIGATORIO):
@@ -128,78 +118,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    let picks = [];
-
-    // ═══════════════════════════════════════════════════════════════
-    // STEP 1: Try to get picks from Google Sheets History (TODAY)
-    // ═══════════════════════════════════════════════════════════════
-    
-    if (isSheetsConfigured()) {
-      console.log('📊 Checking Google Sheets for today\'s picks...');
-      
-      try {
-        const today = new Date().toLocaleDateString('es-CL');
-        const historyItems = await getHistory({ sport, status: 'pending' });
-        
-        // Filter for today
-        const todayPicks = historyItems.filter(item => {
-          const isToday = item.fecha === today;
-          const hasGoodTier = item.tier === 'A+' || item.tier === 'B';
-          const hasGoodEdge = item.edge >= 4;
-          return isToday && hasGoodTier && hasGoodEdge;
-        });
-        
-        // Take top 3 by edge
-        const topPicks = todayPicks
-          .sort((a, b) => b.edge - a.edge)
-          .slice(0, 3);
-        
-        if (topPicks.length >= 3) {
-          console.log(`✅ Found ${topPicks.length} picks in Sheets history`);
-          
-          picks = topPicks.map(item => ({
-            id: item.id,
-            match: item.partido,
-            league: item.liga,
-            kickoff: item.hora,
-            market: item.mercado,
-            selection: item.seleccion,
-            odds: item.cuota,
-            edge_percentage: item.edge,
-            confidence_score: item.confianza / 10,
-            tier: item.tier,
-            kelly_stake: item.kelly,
-            reason: item.conclusion?.substring(0, 100) || '',
-            source: 'sheets'
-          }));
-          
-          const result = { sport, picks, source: 'sheets', generated_at: new Date().toISOString() };
-          cache.set(cacheKey, { data: result, expires: Date.now() + 3600000 });
-          
-          return res.status(200).json(result);
-        }
-        
-        console.log(`⚠️ Only ${topPicks.length} picks in Sheets, generating more...`);
-        picks = topPicks.map(item => ({
-          id: item.id,
-          match: item.partido,
-          league: item.liga,
-          kickoff: item.hora,
-          market: item.mercado,
-          selection: item.seleccion,
-          odds: item.cuota,
-          edge_percentage: item.edge,
-          confidence_score: item.confianza / 10,
-          tier: item.tier,
-          kelly_stake: item.kelly,
-          reason: item.conclusion?.substring(0, 100) || '',
-          source: 'sheets'
-        }));
-      } catch (sheetsError) {
-        console.log('⚠️ Sheets error:', sheetsError.message);
-      }
-    }
-
     // ═══════════════════════════════════════════════════════════════
     // STEP A: THE ODDS API - Get today's matches
     // ═══════════════════════════════════════════════════════════════
@@ -215,9 +133,13 @@ export default async function handler(req, res) {
           const oddsUrl = `https://api.the-odds-api.com/v4/sports/${sportKey}/odds?apiKey=${ODDS_API_KEY}&regions=eu&markets=h2h,totals&oddsFormat=decimal&bookmakers=bet365,pinnacle`;
           const oddsRes = await fetch(oddsUrl);
           
-          if (!oddsRes.ok) continue;
+          if (!oddsRes.ok) {
+            console.log(`⚠️ Odds API ${sportKey}: ${oddsRes.status}`);
+            continue;
+          }
           
           const odds = await oddsRes.json();
+          console.log(`   Found ${odds.length} matches in ${sportKey}`);
           
           // Filter matches starting in next 24h
           const now = Date.now();
@@ -251,7 +173,7 @@ export default async function handler(req, res) {
                 over: totals.outcomes?.find(o => o.name === 'Over')?.price,
                 under: totals.outcomes?.find(o => o.name === 'Under')?.price
               } : null,
-              balance // Lower = more balanced = better for betting
+              balance
             };
           });
           
@@ -266,16 +188,12 @@ export default async function handler(req, res) {
     }
 
     if (matchesData.length === 0) {
-      console.log('⚠️ No matches found, returning existing picks');
-      
-      if (picks.length > 0) {
-        return res.status(200).json({ sport, picks, source: 'partial', generated_at: new Date().toISOString() });
-      }
+      console.log('⚠️ No matches found');
       
       return res.status(200).json({
         sport,
         picks: [],
-        message: 'No hay partidos disponibles hoy con cuotas equilibradas',
+        message: 'No hay partidos disponibles hoy. Intenta más tarde.',
         generated_at: new Date().toISOString()
       });
     }
@@ -366,14 +284,10 @@ Reglas:
       const errText = await deepseekRes.text();
       console.log(`⚠️ DeepSeek error: ${deepseekRes.status}`);
       
-      if (picks.length > 0) {
-        return res.status(200).json({ sport, picks, source: 'partial', generated_at: new Date().toISOString() });
-      }
-      
       return res.status(200).json({
         sport,
         picks: [],
-        message: 'Error generando picks sniper',
+        message: 'Error generando picks sniper. Intenta de nuevo.',
         generated_at: new Date().toISOString()
       });
     }
@@ -408,10 +322,11 @@ Reglas:
       
     } catch (parseError) {
       console.log('⚠️ JSON parse error:', parseError.message);
+      console.log('Raw content:', content.substring(0, 500));
     }
 
-    // Combine existing picks from Sheets with generated picks
-    const allPicks = [...picks, ...generatedPicks]
+    // Filter picks by quality criteria
+    const allPicks = generatedPicks
       .filter(pick => pick.edge_percentage >= 4)
       .filter(pick => pick.odds >= 1.60 && pick.odds <= 2.50)
       .sort((a, b) => b.edge_percentage - a.edge_percentage)
@@ -420,7 +335,7 @@ Reglas:
     const result = {
       sport,
       picks: allPicks,
-      source: allPicks.some(p => p.source === 'sheets') ? 'mixed' : 'generated',
+      source: 'generated',
       generated_at: new Date().toISOString()
     };
 
