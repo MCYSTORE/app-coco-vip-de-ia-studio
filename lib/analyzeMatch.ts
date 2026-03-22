@@ -532,12 +532,24 @@ Responde SOLO en español con la estructura pedida.`
         },
         body: JSON.stringify({
           model: "perplexity/sonar-pro",
+          search_type: "pro",
           max_tokens: 1500,
           temperature: 0.1,
           messages: [
             {
               role: "system",
-              content: `🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+              content: `Eres un investigador deportivo experto. DEBES hacer
+búsquedas profundas y multi-step para cada dato.
+NO respondas con 'DATO NO ENCONTRADO' sin haber
+buscado en mínimo 5 URLs distintas. Para cada equipo
+busca forma reciente, lesionados y estadísticas en:
+soccerway.com, transfermarkt.es, sofascore.com,
+flashscore.es y marca.com en ese orden.
+Responde TODO en español.
+
+---
+
+🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
 Traduce cualquier fuente en otro idioma al español.
 Nunca mezcles idiomas en la respuesta.
 
