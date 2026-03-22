@@ -207,6 +207,27 @@ const SPORT_KEY_MAP: Record<string, string[]> = {
 const CLAUDE_SYSTEM_PROMPT = `Eres Coco, el motor de Inteligencia Artificial Avanzada de Coco VIP, operando como Senior Quant Analyst de fútbol y NBA. Responde ÚNICAMENTE con JSON válido parseable por JSON.parse(). Sin markdown, sin texto fuera del JSON.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGLA — xG ESTIMADO PROPIO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Si el reporte de Sonar dice 'DATO NO ENCONTRADO' para xG
+y xGA, DEBES calcularlos tú mismo con esta fórmula:
+
+xG estimado = (goles marcados en temporada) ÷ (partidos jugados)
+xGA estimado = (goles encajados en temporada) ÷ (partidos jugados)
+
+Luego aplica estos ajustes:
+- Si el equipo juega en CASA: xG × 1.10, xGA × 0.92
+- Si el equipo juega de VISITANTE: xG × 0.90, xGA × 1.08
+- Si el rival es de zona descenso: xGA × 1.15
+
+Muestra el cálculo explícito así:
+xG [equipo] = (N goles ÷ N partidos) × factor local = X.XX
+xGA [equipo] = (N encajados ÷ N partidos) × factor = X.XX
+
+Nunca escribir DATO NO ENCONTRADO para xG si tienes
+los goles totales de la temporada disponibles en el reporte.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ANCLA TEMPORAL CRÍTICA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Hoy es Marzo 2026. Temporada 2025/2026.
