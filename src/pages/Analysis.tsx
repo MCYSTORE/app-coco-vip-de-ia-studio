@@ -541,8 +541,8 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
     }
   };
 
-  const [savingToSheets, setSavingToSheets] = useState(false);
-  const [sheetsSaveResult, setSheetsSaveResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [savingToSupabase, setSavingToSupabase] = useState(false);
+  const [supabaseSaveResult, setSupabaseSaveResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const saveToHistory = async () => {
     if (!result) return;
@@ -560,9 +560,9 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
       
       localStorage.setItem(STORAGE_KEY, JSON.stringify([newPrediction, ...existing]));
       
-      // 2. Guardar en Google Sheets (persistencia para seguimiento)
-      setSavingToSheets(true);
-      setSheetsSaveResult(null);
+      // 2. Guardar en Supabase (persistencia para seguimiento)
+      setSavingToSupabase(true);
+      setSupabaseSaveResult(null);
       
       try {
         const response = await fetch('/api/history-save', {
@@ -577,23 +577,23 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
         const data = await response.json();
         
         if (data.success) {
-          setSheetsSaveResult({ 
+          setSupabaseSaveResult({ 
             success: true, 
-            message: '✅ Guardado en Google Sheets para seguimiento' 
+            message: '✅ Guardado en Supabase para seguimiento' 
           });
-          console.log('✅ Análisis guardado en Google Sheets:', data.id);
+          console.log('✅ Análisis guardado en Supabase:', data.id);
         } else {
-          setSheetsSaveResult({ 
+          setSupabaseSaveResult({ 
             success: false, 
             message: data.configured === false 
-              ? '⚠️ Google Sheets no configurado - solo guardado local'
-              : '⚠️ Error al guardar en Sheets - solo guardado local'
+              ? '⚠️ Supabase no configurado - solo guardado local'
+              : '⚠️ Error al guardar en Supabase - solo guardado local'
           });
-          console.log('⚠️ No se pudo guardar en Google Sheets:', data.error);
+          console.log('⚠️ No se pudo guardar en Supabase:', data.error);
         }
-      } catch (sheetsError) {
-        console.error("Error saving to Google Sheets:", sheetsError);
-        setSheetsSaveResult({ 
+      } catch (supabaseError) {
+        console.error("Error saving to Supabase:", supabaseError);
+        setSupabaseSaveResult({ 
           success: false, 
           message: '⚠️ Error de conexión - solo guardado local' 
         });
@@ -603,7 +603,7 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
     } catch (error) {
       console.error("Error saving to history:", error);
     } finally {
-      setSavingToSheets(false);
+      setSavingToSupabase(false);
     }
   };
 
@@ -1118,19 +1118,19 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
               {!saved ? (
                 <button
                   onClick={saveToHistory}
-                  disabled={savingToSheets}
+                  disabled={savingToSupabase}
                   className="mt-6 w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-70"
                   style={{ backgroundColor: 'var(--color-success)', color: 'white' }}
                 >
-                  {savingToSheets ? (
+                  {savingToSupabase ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Guardando en Google Sheets...
+                      Guardando en Supabase...
                     </>
                   ) : (
                     <>
                       <TrendingUp className="w-4 h-4" />
-                      Guardar en Historial (Google Sheets)
+                      Guardar en Historial (Supabase)
                     </>
                   )}
                 </button>
@@ -1140,9 +1140,9 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
                     <Verified className="w-4 h-4" />
                     Guardado en historial local
                   </div>
-                  {sheetsSaveResult && (
-                    <div className={`w-full py-2 px-4 rounded-xl text-sm text-center ${sheetsSaveResult.success ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
-                      {sheetsSaveResult.message}
+                  {supabaseSaveResult && (
+                    <div className={`w-full py-2 px-4 rounded-xl text-sm text-center ${supabaseSaveResult.success ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                      {supabaseSaveResult.message}
                     </div>
                   )}
                 </div>

@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS predictions (
   -- Analysis Content
   analysis_text TEXT,
   risk_factors TEXT[],      -- Array of risk factors
+  supporting_factors TEXT[], -- Array of supporting factors
+  deep_reasoning TEXT,       -- Deep analysis reasoning
+  research_context TEXT,     -- Web research context
+  
+  -- Kelly Criterion
+  kelly_stake DECIMAL,       -- Kelly stake units
   
   -- Additional Context
   user_context TEXT,
@@ -99,6 +105,12 @@ CREATE INDEX IF NOT EXISTS idx_predictions_player_name ON predictions(player_nam
 -- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS player_name TEXT DEFAULT NULL;
 -- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS player_team TEXT DEFAULT NULL;
 -- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS line DECIMAL DEFAULT NULL;
+
+-- Add missing analysis columns if they don't exist
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS supporting_factors TEXT[] DEFAULT '{}';
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS deep_reasoning TEXT;
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS research_context TEXT;
+-- ALTER TABLE predictions ADD COLUMN IF NOT EXISTS kelly_stake DECIMAL;
 
 -- RLS Policies
 ALTER TABLE predictions ENABLE ROW LEVEL SECURITY;

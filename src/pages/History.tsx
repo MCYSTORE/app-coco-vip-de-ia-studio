@@ -50,8 +50,8 @@ interface HistoryStats {
   roi: number;
 }
 
-// Google Sheets URL
-const SHEETS_URL = `https://docs.google.com/spreadsheets/d/${import.meta.env.VITE_GOOGLE_SHEETS_ID || ''}`;
+// Supabase Dashboard URL
+const SUPABASE_DASHBOARD_URL = 'https://supabase.com/dashboard/project/hrsjwpbamfszaldctbgv';
 
 export default function History() {
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -185,14 +185,14 @@ export default function History() {
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'var(--color-warning-bg)' }}>
           <AlertTriangle className="w-8 h-8" style={{ color: 'var(--color-warning)' }} />
         </div>
-        <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>Google Sheets no configurado</h3>
+        <h3 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>Supabase no configurado</h3>
         <p className="text-sm mt-2" style={{ color: 'var(--color-text-secondary)' }}>
           Añade las variables de entorno en Vercel:
         </p>
         <div className="mt-4 text-left max-w-sm mx-auto p-4 rounded-xl text-xs font-mono" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-muted)' }}>
-          <p>GOOGLE_SHEETS_ID</p>
-          <p>GOOGLE_SERVICE_ACCOUNT_EMAIL</p>
-          <p>GOOGLE_PRIVATE_KEY</p>
+          <p>SUPABASE_URL</p>
+          <p>SUPABASE_ANON_KEY</p>
+          <p>SUPABASE_SERVICE_ROLE_KEY</p>
         </div>
       </div>
     );
@@ -248,12 +248,12 @@ export default function History() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Historial</h2>
         <button
-          onClick={() => window.open(SHEETS_URL, '_blank')}
+          onClick={() => window.open(SUPABASE_DASHBOARD_URL, '_blank')}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all"
           style={{ backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success)' }}
         >
           <ExternalLink className="w-4 h-4" />
-          Abrir Sheets
+          Abrir Supabase
         </button>
       </div>
 
