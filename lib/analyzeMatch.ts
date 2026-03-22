@@ -1,10 +1,11 @@
 /**
  * Coco VIP - AI-Driven Match Analysis Pipeline
  * 
- * 3-Step Pipeline:
+ * 4-Step Pipeline:
  * 1. The Odds API - Real-time odds from major bookmakers
- * 2. Perplexity (via OpenRouter) - Research agent for live web data
- * 3. DeepSeek R1 (via OpenRouter) - Quant/Sniper agent for value calculation
+ * 2. Parallel Research (Gemini 2.5 Pro + Perplexity Sonar Pro) - Live web data in parallel
+ * 3. Claude Sonnet 4.6 - Quant/Sniper agent for value calculation
+ * 4. Grok 4.1 Fast - Final validation and formatting
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -200,10 +201,10 @@ const SPORT_KEY_MAP: Record<string, string[]> = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// DEEPSEEK SYSTEM PROMPT
+// CLAUDE SONNET SYSTEM PROMPT
 // ═══════════════════════════════════════════════════════════════
 
-const DEEPSEEK_SYSTEM_PROMPT = `Eres Coco, el motor de Inteligencia Artificial Avanzada de Coco VIP, operando como Senior Quant Analyst de fútbol y NBA. Responde ÚNICAMENTE con JSON válido parseable por JSON.parse(). Sin markdown, sin texto fuera del JSON.
+const CLAUDE_SYSTEM_PROMPT = `Eres Coco, el motor de Inteligencia Artificial Avanzada de Coco VIP, operando como Senior Quant Analyst de fútbol y NBA. Responde ÚNICAMENTE con JSON válido parseable por JSON.parse(). Sin markdown, sin texto fuera del JSON.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ANCLA TEMPORAL CRÍTICA
@@ -414,25 +415,213 @@ NUNCA usar datos de temporadas anteriores a 2025/2026
 NUNCA kelly_stake_units > 0.25`;
 
 // ═══════════════════════════════════════════════════════════════
-// PERPLEXITY SYSTEM PROMPT
+// STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Perplexity Sonar Pro)
 // ═══════════════════════════════════════════════════════════════
 
-const PERPLEXITY_SYSTEM_PROMPT = `Today is March 2026. You are a sports research assistant with real-time web search. Search for the latest news about the requested match.
+interface Step2Result {
+  researchContext: string;
+  dataQuality: 'alta' | 'media' | 'baja';
+  warning?: string;
+}
 
-Find and return ONLY confirmed data from 2025/2026:
-- Injuries and suspensions (confirmed starting XI if available)
-- Team motivation and standings context
-- Fatigue or back-to-back schedule
-- Advanced stats: xG, xGA, PPDA from 2025/2026 season
-- Recent form: last 5 matches with exact scores
-- Head-to-head record (2024/2025 and 2025/2026 only)
-- Relevant tactical news or manager quotes
+async function runParallelResearch(
+  matchName: string,
+  sport: 'football' | 'basketball' | 'baseball'
+): Promise<Step2Result> {
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-DO NOT hallucinate.
-DO NOT use data from 2024 season or earlier.
-If specific data is not found, state clearly: 'No data found for [item]'.
+  if (!OPENROUTER_API_KEY) {
+    return {
+      researchContext: 'Sin contexto web disponible.',
+      dataQuality: 'baja',
+      warning: 'OPENROUTER_API_KEY no configurada'
+    };
+  }
 
-Respond in Spanish with a concise factual summary.`;
+  try {
+    // STEP 2 — BÚSQUEDA PARALELA (Gemini 2.5 Pro + Perplexity Sonar Pro)
+    const [researchA, researchB] = await Promise.all([
+
+      // ── LLAMADA A: Gemini 2.5 Pro (forma reciente, clasificación, noticias)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro-exp-03-25",
+          max_tokens: 2000,
+          temperature: 0.1,
+          messages: [
+            {
+              role: "system",
+              content: `🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+Traduce cualquier fuente en otro idioma al español.
+Nunca mezcles idiomas en la respuesta.
+
+Eres un investigador deportivo con acceso web en tiempo real.
+Busca información ACTUAL sobre el partido indicado.
+Hoy es Marzo 2026. Solo datos de temporada 2025/2026.
+NUNCA inventes datos. Si no encuentras algo escribe:
+'DATO NO ENCONTRADO'.
+No incluyas tu proceso de razonamiento, solo el reporte final.
+
+Formato de respuesta usando árbol ├── └──:
+
+📋 SECCIÓN A — FORMA Y CONTEXTO
+
+1. FORMA RECIENTE (últimos 5 partidos de CADA equipo,
+   NO solo H2H entre ellos, sino todos sus partidos recientes)
+   ├── Local: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   ├── Local: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   ├── Local: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   ├── Local: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   └── Local: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   ├── Visitante: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   ├── Visitante: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   ├── Visitante: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   ├── Visitante: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   └── Visitante: [fecha] vs [rival] [marcador] | [nota táctica breve]
+
+2. CLASIFICACIÓN ACTUAL
+   ├── Local: [posición]º con [puntos] pts en [nombre de la liga]
+   └── Visitante: [posición]º con [puntos] pts en [nombre de la liga]
+
+3. HEAD TO HEAD (últimos 3 enfrentamientos oficiales)
+   ├── [fecha] [local] [marcador] [visitante] | [competición]
+   ├── [fecha] [local] [marcador] [visitante] | [competición]
+   └── [fecha] [local] [marcador] [visitante] | [competición]
+
+4. MOTIVACIÓN Y CONTEXTO
+   └── [pelea por título / descenso / Champions / rotaciones / etc]
+
+5. NOTICIAS RELEVANTES (últimas 48h)
+   ├── [fecha] — [titular en español] — [fuente]
+   └── [fecha] — [titular en español] — [fuente]`
+            },
+            {
+              role: "user",
+              content: `Busca en tiempo real el partido: ${matchName}
+Deporte: ${sport}. Fecha: Marzo 2026.
+Responde SOLO en español con la estructura pedida.`
+            }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => r.choices?.[0]?.message?.content ?? "Sin datos de contexto")
+        .catch(() => "Sin datos de contexto (error Gemini)"),
+
+      // ── LLAMADA B: Perplexity Sonar Pro (estadísticas avanzadas y lesiones)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "perplexity/sonar-pro",
+          max_tokens: 1500,
+          temperature: 0.1,
+          messages: [
+            {
+              role: "system",
+              content: `🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+Traduce cualquier fuente en otro idioma al español.
+Nunca mezcles idiomas en la respuesta.
+
+Eres un investigador OSINT deportivo de nivel senior.
+Especialidad: estadísticas avanzadas y lesiones confirmadas.
+Hoy es Marzo 2026. Solo datos de temporada 2025/2026.
+
+Busca en FBref.com, Understat.com, SofaScore.com, WhoScored.com.
+NUNCA inventes estadísticas.
+Si no encuentras un dato tras buscar en 3+ fuentes:
+escribe exactamente 'DATO NO ENCONTRADO'.
+No incluyas tu proceso de búsqueda, solo el reporte final.
+
+Formato de respuesta usando árbol ├── └──:
+
+📋 SECCIÓN B — ESTADÍSTICAS AVANZADAS Y LESIONES
+
+1. LESIONADOS Y SUSPENDIDOS CONFIRMADOS
+   ├── Local: [jugador] - [lesión/estado] - [fuente/fecha]
+   └── Visitante: [jugador] - [lesión/estado] - [fuente/fecha]
+   (Si no hay bajas: 'Plantilla completa según [fuente]')
+
+2. ESTADÍSTICAS AVANZADAS 2025/2026
+   ├── xG local (promedio por partido): [número o 'DATO NO ENCONTRADO']
+   ├── xGA local (promedio por partido): [número o 'DATO NO ENCONTRADO']
+   ├── xG visitante (promedio por partido): [número o 'DATO NO ENCONTRADO']
+   ├── xGA visitante (promedio por partido): [número o 'DATO NO ENCONTRADO']
+   ├── PPDA local: [número o 'DATO NO ENCONTRADO']
+   └── PPDA visitante: [número o 'DATO NO ENCONTRADO']
+
+3. ESTADÍSTICAS DE GOLES (temporada 2025/2026)
+   ├── Promedio goles marcados local: [número]
+   ├── Promedio goles recibidos local: [número]
+   ├── Promedio goles marcados visitante: [número]
+   └── Promedio goles recibidos visitante: [número]
+
+4. BTTS Y OVER/UNDER (temporada actual)
+   ├── % partidos con BTTS local: [número]%
+   ├── % partidos con BTTS visitante: [número]%
+   ├── % partidos Over 2.5 local: [número]%
+   └── % partidos Over 2.5 visitante: [número]%`
+            },
+            {
+              role: "user",
+              content: `Investiga estadísticas avanzadas y lesiones para: ${matchName}
+Deporte: ${sport}. Fecha: Marzo 2026.
+Busca en FBref, Understat, SofaScore, WhoScored.
+Responde SOLO en español con la estructura pedida.`
+            }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => r.choices?.[0]?.message?.content ?? "Sin datos estadísticos")
+        .catch(() => "Sin datos estadísticos (error Sonar Pro)")
+
+    ]);
+
+    // Combinar ambas respuestas en una sola variable para Step 3
+    const researchContext = `
+═══════════════════════════════════════════════
+SECCIÓN A: FORMA, CLASIFICACIÓN Y CONTEXTO
+(Fuente: Gemini 2.5 Pro con Google Search)
+═══════════════════════════════════════════════
+
+${researchA}
+
+═══════════════════════════════════════════════
+SECCIÓN B: ESTADÍSTICAS AVANZADAS Y LESIONES
+(Fuente: Perplexity Sonar Pro)
+═══════════════════════════════════════════════
+
+${researchB}
+`;
+
+    // data_quality logic basada en los resultados
+    const hasStats = !researchB.includes("DATO NO ENCONTRADO") ||
+                     researchB.includes("xG");
+    const hasForm  = !researchA.includes("Sin datos");
+
+    const dataQuality: 'alta' | 'media' | 'baja' = hasStats && hasForm ? "alta"
+                                    : hasForm || hasStats ? "media"
+                                    : "baja";
+
+    console.log(`✅ Parallel research completed (${researchContext.length} chars, quality: ${dataQuality})`);
+    return { researchContext, dataQuality };
+
+  } catch (error) {
+    console.error('Parallel research error:', error);
+    return {
+      researchContext: 'Sin contexto web disponible.',
+      dataQuality: 'baja',
+      warning: 'Búsqueda paralela fallida'
+    };
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // STEP 1: THE ODDS API
@@ -540,68 +729,10 @@ async function fetchOddsFromAPI(
   };
 }
 
-// ═══════════════════════════════════════════════════════════════
-// STEP 2: PERPLEXITY RESEARCH AGENT
-// ═══════════════════════════════════════════════════════════════
 
-async function fetchResearchContext(
-  matchName: string,
-  sport: 'football' | 'basketball' | 'baseball'
-): Promise<{ context: string; warning?: string }> {
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
-
-  if (!OPENROUTER_API_KEY) {
-    return { 
-      context: 'Sin contexto web disponible.', 
-      warning: 'OPENROUTER_API_KEY no configurada' 
-    };
-  }
-
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': APP_URL,
-        'X-Title': 'Coco VIP Research'
-      },
-      body: JSON.stringify({
-        model: 'perplexity/sonar-pro',
-        temperature: 0.1,
-        max_tokens: 1000,
-        messages: [
-          { role: 'system', content: PERPLEXITY_SYSTEM_PROMPT },
-          { 
-            role: 'user', 
-            content: `Investiga el partido: ${matchName}\nDeporte: ${sport}\nFecha: Marzo 2026` 
-          }
-        ]
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Perplexity API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const context = data.choices?.[0]?.message?.content || 'Sin contexto web disponible.';
-    
-    console.log(`✅ Research context fetched (${context.length} chars)`);
-    return { context };
-
-  } catch (error) {
-    console.error('Research agent error:', error);
-    return { 
-      context: 'Sin contexto web disponible.', 
-      warning: 'Búsqueda web fallida' 
-    };
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════
-// STEP 3: DEEPSEEK QUANT/SNIPER AGENT
+// STEP 3: CLAUDE SONNET 4.6 - QUANT/SNIPER AGENT
 // ═══════════════════════════════════════════════════════════════
 
 async function runQuantAnalysis(
@@ -640,18 +771,18 @@ ${researchContext}`;
         'X-Title': 'Coco VIP Quant'
       },
       body: JSON.stringify({
-        model: 'deepseek/deepseek-r1',
+        model: 'anthropic/claude-sonnet-4-6',
         temperature: 0.1,
         max_tokens: 2000,
         messages: [
-          { role: 'system', content: DEEPSEEK_SYSTEM_PROMPT },
+          { role: 'system', content: CLAUDE_SYSTEM_PROMPT },
           { role: 'user', content: userMessage }
         ]
       })
     });
 
     if (!response.ok) {
-      throw new Error(`DeepSeek API error: ${response.status}`);
+      throw new Error(`Claude API error: ${response.status}`);
     }
 
     const data = await response.json();
@@ -673,12 +804,77 @@ ${researchContext}`;
     if (sport === 'baseball') result.sport = 'MLB';
     if (sport === 'football') result.sport = 'Football';
 
-    console.log(`✅ Quant analysis completed for ${matchName}`);
+    console.log(`✅ Claude Sonnet analysis completed for ${matchName}`);
     return result;
 
   } catch (error) {
-    console.error('Quant agent error:', error);
+    console.error('Claude agent error:', error);
     throw error;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STEP 4: GROK 4.1 FAST - FINAL VALIDATION
+// ═══════════════════════════════════════════════════════════════
+
+async function runFinalValidation(
+  result: AnalysisResult
+): Promise<AnalysisResult> {
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+  if (!OPENROUTER_API_KEY) {
+    console.log('⚠️ OPENROUTER_API_KEY not configured, skipping Step 4');
+    return result;
+  }
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'x-ai/grok-4-1-fast',
+        temperature: 0.1,
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'system',
+            content: `Eres un validador de análisis deportivos. Verifica que el JSON recibido:
+1. Tiene todos los campos requeridos
+2. Los valores numéricos están en rangos lógicos
+3. edge_percentage y confidence_score son coherentes
+Si algo está mal, corrígelo. Responde SOLO con el JSON corregido.`
+          },
+          {
+            role: 'user',
+            content: JSON.stringify(result)
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      console.log(`⚠️ Grok validation skipped: ${response.status}`);
+      return result;
+    }
+
+    const data = await response.json();
+    let content = data.choices?.[0]?.message?.content || '';
+    content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    const validated: AnalysisResult = JSON.parse(content);
+    validated.timestamp = result.timestamp;
+    validated.oddsPayload = result.oddsPayload;
+    validated.researchContext = result.researchContext;
+
+    console.log(`✅ Grok validation completed`);
+    return validated;
+
+  } catch (error) {
+    console.error('Grok validation error:', error);
+    return result;
   }
 }
 
@@ -696,8 +892,9 @@ export async function analyzeMatch(
     currentStep: 1,
     steps: [
       { step: 1, status: 'pending', icon: '🔍', message: 'Buscando cuotas en tiempo real...', progress: 15 },
-      { step: 2, status: 'pending', icon: '📡', message: 'Investigando la web (Lesiones, xG, Noticias)...', progress: 45 },
-      { step: 3, status: 'pending', icon: '🤖', message: 'DeepSeek calculando Edge y valor matemático...', progress: 80 }
+      { step: 2, status: 'pending', icon: '📡', message: 'Búsqueda paralela (Gemini + Sonar Pro)...', progress: 45 },
+      { step: 3, status: 'pending', icon: '🤖', message: 'Claude Sonnet analizando valor...', progress: 65 },
+      { step: 4, status: 'pending', icon: '✅', message: 'Grok validando análisis...', progress: 90 }
     ],
     result: null,
     error: null
@@ -740,31 +937,43 @@ export async function analyzeMatch(
   emitProgress(1, 'completed', oddsWarning);
 
   // ═══════════════════════════════════════════════════════════════
-  // STEP 2: PERPLEXITY RESEARCH
+  // STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Sonar Pro)
   // ═══════════════════════════════════════════════════════════════
 
   emitProgress(2, 'running');
   
-  const { context: researchContext, warning: researchWarning } = await fetchResearchContext(matchName, sport);
+  const { researchContext, dataQuality, warning: researchWarning } = await runParallelResearch(matchName, sport);
   
   if (researchWarning) {
     console.log(`⚠️ Step 2 warning: ${researchWarning}`);
   }
   
+  console.log(`📊 Data quality: ${dataQuality}`);
+  
   emitProgress(2, 'completed', researchWarning);
 
   // ═══════════════════════════════════════════════════════════════
-  // STEP 3: DEEPSEEK QUANT ANALYSIS
+  // STEP 3: CLAUDE SONNET QUANT ANALYSIS
   // ═══════════════════════════════════════════════════════════════
 
   emitProgress(3, 'running');
   
-  const result = await runQuantAnalysis(matchName, sport, oddsPayload, researchContext);
+  const quantResult = await runQuantAnalysis(matchName, sport, oddsPayload, researchContext);
+  
+  emitProgress(3, 'completed');
+
+  // ═══════════════════════════════════════════════════════════════
+  // STEP 4: GROK FINAL VALIDATION
+  // ═══════════════════════════════════════════════════════════════
+
+  emitProgress(4, 'running');
+  
+  const result = await runFinalValidation(quantResult);
   
   // Emit final completed state
   if (onProgress) {
     const finalState: AnalysisState = {
-      currentStep: 3,
+      currentStep: 4,
       steps: initialState.steps.map(s => ({ ...s, status: 'completed' as const })),
       result,
       error: null
