@@ -1,16 +1,81 @@
 /**
  * Coco VIP - AI-Driven Match Analysis Pipeline
  * 
- * 4-Step Pipeline:
+ * 5-Step Pipeline:
+ * 0. SoccerData (Python) - Official stats from FBref/FotMob
  * 1. The Odds API - Real-time odds from major bookmakers
  * 2. Parallel Research (Gemini 2.5 Pro + Perplexity Sonar Pro) - Live web data in parallel
  * 3. Claude Sonnet 4.6 - Quant/Sniper agent for value calculation
  * 4. Grok 4.1 Fast - Final validation and formatting
  */
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as path from 'path';
+
+const execAsync = promisify(exec);
+
 // ═══════════════════════════════════════════════════════════════
 // TYPES & INTERFACES
 // ═══════════════════════════════════════════════════════════════
+
+export interface SoccerDataStats {
+  source: string;
+  timestamp: string;
+  home_team: string;
+  away_team: string;
+  league: string;
+  season: string;
+  home_xG_avg?: number;
+  home_xGA_avg?: number;
+  away_xG_avg?: number;
+  away_xGA_avg?: number;
+  home_corners_avg?: number;
+  away_corners_avg?: number;
+  home_goals_total?: number;
+  away_goals_total?: number;
+  home_matches?: number;
+  away_matches?: number;
+  home_goals_avg?: number;
+  away_goals_avg?: number;
+  home_position?: number;
+  home_points?: number;
+  away_position?: number;
+  away_points?: number;
+  home_shots_avg?: number;
+  home_shots_on_target_avg?: number;
+  away_shots_avg?: number;
+  away_shots_on_target_avg?: number;
+  home_form?: Array<{date: string; opponent: string; result: string; goals_for: number; goals_against: number}>;
+  away_form?: Array<{date: string; opponent: string; result: string; goals_for: number; goals_against: number}>;
+  fallback: boolean;
+  error?: string;
+}
+
+export interface UnderstatXG {
+  source: string;
+  timestamp: string;
+  league: string;
+  home_team: string;
+  away_team: string;
+  season: string;
+  home_team_resolved?: string;
+  away_team_resolved?: string;
+  home_xG_total?: number | string;
+  home_xGA_total?: number | string;
+  home_matches?: number;
+  home_xG_avg?: number;
+  home_xGA_avg?: number;
+  away_xG_total?: number | string;
+  away_xGA_total?: number | string;
+  away_matches?: number;
+  away_xG_avg?: number;
+  away_xGA_avg?: number;
+  fallback?: boolean;
+  partial_fallback?: boolean;
+  warning?: string;
+  error?: string;
+}
 
 export interface OddsPayload {
   match: string;
@@ -458,7 +523,8 @@ interface Step2Result {
 
 async function runParallelResearch(
   matchName: string,
-  sport: 'football' | 'basketball' | 'baseball'
+  sport: 'football' | 'basketball' | 'baseball',
+  understatData: UnderstatXG | null
 ): Promise<Step2Result> {
   const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -615,7 +681,22 @@ Formato de respuesta usando árbol ├── └──:
             },
             {
               role: "user",
-              content: `Busca xG y xGA en estas fuentes EN ESTE ORDEN:
+              content: `DATOS OFICIALES xG de Understat (usar como base):
+
+${understatData && !understatData.fallback ? 
+`${understatData.home_team}: xG promedio: ${understatData.home_xG_avg} por partido
+${understatData.home_team}: xGA promedio: ${understatData.home_xGA_avg} por partido
+${understatData.away_team}: xG promedio: ${understatData.away_xG_avg} por partido
+${understatData.away_team}: xGA promedio: ${understatData.away_xGA_avg} por partido
+
+Estos datos son reales y tienen prioridad sobre
+cualquier estimación. NO calcular xG manualmente
+si estos datos están disponibles.`
+: 'Understat no disponible para este partido.'}
+
+---
+
+Busca xG y xGA en estas fuentes EN ESTE ORDEN:
 1. fotmob.com/leagues (tiene xG por equipo gratis)
 2. sofascore.com (estadísticas de temporada)
 3. whoscored.com
@@ -711,6 +792,287 @@ ${researchB}
       warning: 'Búsqueda paralela fallida'
     };
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STEP 0: SOCCERDATA (PYTHON) - OFFICIAL STATS FROM FBREF/FOTMOB
+// ═══════════════════════════════════════════════════════════════
+
+const LEAGUE_MAP: Record<string, string> = {
+  'soccer_epl': 'ENG-Premier-League',
+  'soccer_spain_la_liga': 'ESP-LaLiga',
+  'soccer_italy_serie_a': 'ITA-Serie-A',
+  'soccer_germany_bundesliga': 'GER-Bundesliga',
+  'soccer_france_ligue_one': 'FRA-Ligue-1',
+  'soccer_portugal_primeira_liga': 'POR-LigaPortugal',
+  'soccer_netherlands_eredivisie': 'NED-Eredivisie',
+};
+
+async function fetchSoccerData(
+  matchName: string,
+  sport: 'football' | 'basketball' | 'baseball'
+): Promise<{ soccerData: SoccerDataStats | null; warning?: string }> {
+  // Solo aplicar a fútbol
+  if (sport !== 'football') {
+    return { soccerData: null, warning: 'SoccerData solo disponible para fútbol' };
+  }
+
+  try {
+    // Parsear equipos del matchName
+    const teams = matchName.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
+    const homeTeam = teams[0]?.trim() || '';
+    const awayTeam = teams[1]?.trim() || '';
+    
+    // Detectar liga basada en el contexto o usar LaLiga por defecto
+    const league = 'ESP-LaLiga'; // Se podría hacer más inteligente
+    
+    // Ruta al script Python
+    const scriptPath = path.join(process.cwd(), 'scripts', 'soccerdata_stats.py');
+    
+    // Preparar input para el script
+    const inputPayload = JSON.stringify({
+      league,
+      home_team: homeTeam,
+      away_team: awayTeam,
+      season: '2025'
+    });
+    
+    // Ejecutar Python script con timeout de 30 segundos
+    const { stdout, stderr } = await execAsync(
+      `python3 "${scriptPath}"`,
+      {
+        timeout: 30000,
+        maxBuffer: 1024 * 1024 // 1MB buffer
+      }
+    );
+    
+    if (stderr && !stderr.includes('Warning')) {
+      console.log(`⚠️ SoccerData stderr: ${stderr.substring(0, 200)}`);
+    }
+    
+    const soccerData: SoccerDataStats = JSON.parse(stdout);
+    
+    if (soccerData.fallback) {
+      console.log(`⚠️ SoccerData fallback: ${soccerData.error || 'Unknown error'}`);
+      return { soccerData, warning: soccerData.error };
+    }
+    
+    console.log(`✅ SoccerData fetched: ${homeTeam} vs ${awayTeam}`);
+    return { soccerData };
+    
+  } catch (error: any) {
+    // Si Python no está disponible o falla, retornar null sin bloquear
+    console.log(`⚠️ SoccerData not available: ${error.message}`);
+    return { 
+      soccerData: null, 
+      warning: 'SoccerData no disponible (Python script falló)' 
+    };
+  }
+}
+
+function formatSoccerDataForPrompt(soccerData: SoccerDataStats | null): string {
+  if (!soccerData) {
+    return 'DATOS DE SOCCERDATA NO DISPONIBLES';
+  }
+  
+  if (soccerData.fallback) {
+    return `SOCCERDATA FALLBACK: ${soccerData.error || 'Error desconocido'}`;
+  }
+  
+  const lines: string[] = [
+    '═══════════════════════════════════════════════',
+    'DATOS OFICIALES DE SOCCERDATA (FBref/FotMob)',
+    '═══════════════════════════════════════════════',
+    '',
+    `Liga: ${soccerData.league}`,
+    `Temporada: ${soccerData.season}`,
+    '',
+    '── ESTADÍSTICAS xG/xGA ──',
+  ];
+  
+  if (soccerData.home_xG_avg) {
+    lines.push(`xG ${soccerData.home_team} (promedio): ${soccerData.home_xG_avg}`);
+  }
+  if (soccerData.home_xGA_avg) {
+    lines.push(`xGA ${soccerData.home_team} (promedio): ${soccerData.home_xGA_avg}`);
+  }
+  if (soccerData.away_xG_avg) {
+    lines.push(`xG ${soccerData.away_team} (promedio): ${soccerData.away_xG_avg}`);
+  }
+  if (soccerData.away_xGA_avg) {
+    lines.push(`xGA ${soccerData.away_team} (promedio): ${soccerData.away_xGA_avg}`);
+  }
+  
+  lines.push('', '── CORNERS ──');
+  if (soccerData.home_corners_avg) {
+    lines.push(`Corners ${soccerData.home_team} (promedio): ${soccerData.home_corners_avg}/partido`);
+  }
+  if (soccerData.away_corners_avg) {
+    lines.push(`Corners ${soccerData.away_team} (promedio): ${soccerData.away_corners_avg}/partido`);
+  }
+  
+  lines.push('', '── CLASIFICACIÓN ──');
+  if (soccerData.home_position) {
+    lines.push(`${soccerData.home_team}: ${soccerData.home_position}º (${soccerData.home_points || '?'} pts)`);
+  }
+  if (soccerData.away_position) {
+    lines.push(`${soccerData.away_team}: ${soccerData.away_position}º (${soccerData.away_points || '?'} pts)`);
+  }
+  
+  lines.push('', '── GOLES TEMPORADA ──');
+  if (soccerData.home_goals_total && soccerData.home_matches) {
+    lines.push(`${soccerData.home_team}: ${soccerData.home_goals_total} goles en ${soccerData.home_matches} partidos (${soccerData.home_goals_avg?.toFixed(2)}/partido)`);
+  }
+  if (soccerData.away_goals_total && soccerData.away_matches) {
+    lines.push(`${soccerData.away_team}: ${soccerData.away_goals_total} goles en ${soccerData.away_matches} partidos (${soccerData.away_goals_avg?.toFixed(2)}/partido)`);
+  }
+  
+  lines.push('', '── TIROS ──');
+  if (soccerData.home_shots_avg) {
+    lines.push(`${soccerData.home_team}: ${soccerData.home_shots_avg} tiros/partido (${soccerData.home_shots_on_target_avg || '?'} a puerta)`);
+  }
+  if (soccerData.away_shots_avg) {
+    lines.push(`${soccerData.away_team}: ${soccerData.away_shots_avg} tiros/partido (${soccerData.away_shots_on_target_avg || '?'} a puerta)`);
+  }
+  
+  // Forma reciente
+  if (soccerData.home_form && soccerData.home_form.length > 0) {
+    lines.push('', `── FORMA RECIENTE ${soccerData.home_team} ──`);
+    soccerData.home_form.forEach((match: any) => {
+      lines.push(`[${match.date}] vs ${match.opponent}: ${match.result} (${match.goals_for}-${match.goals_against})`);
+    });
+  }
+  
+  if (soccerData.away_form && soccerData.away_form.length > 0) {
+    lines.push('', `── FORMA RECIENTE ${soccerData.away_team} ──`);
+    soccerData.away_form.forEach((match: any) => {
+      lines.push(`[${match.date}] vs ${match.opponent}: ${match.result} (${match.goals_for}-${match.goals_against})`);
+    });
+  }
+  
+  return lines.join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UNDERSTAT xG DATA (PYTHON)
+// ═══════════════════════════════════════════════════════════════
+
+const UNDERSTAT_LEAGUE_MAP: Record<string, string> = {
+  'soccer_epl': 'EPL',
+  'soccer_spain_la_liga': 'La_liga',
+  'soccer_italy_serie_a': 'Serie_A',
+  'soccer_germany_bundesliga': 'Bundesliga',
+  'soccer_france_ligue_one': 'Ligue_1',
+  'ESP-LaLiga': 'La_liga',
+  'ENG-Premier-League': 'EPL',
+  'ITA-Serie-A': 'Serie_A',
+  'GER-Bundesliga': 'Bundesliga',
+  'FRA-Ligue-1': 'Ligue_1'
+};
+
+async function fetchUnderstatData(
+  matchName: string,
+  sport: 'football' | 'basketball' | 'baseball'
+): Promise<{ understatData: UnderstatXG | null; warning?: string }> {
+  // Solo aplicar a fútbol
+  if (sport !== 'football') {
+    return { understatData: null, warning: 'Understat solo disponible para fútbol' };
+  }
+
+  try {
+    // Parsear equipos del matchName
+    const teams = matchName.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
+    const homeTeam = teams[0]?.trim() || '';
+    const awayTeam = teams[1]?.trim() || '';
+    
+    // Detectar liga (usar La_liga por defecto)
+    const league = 'La_liga';
+    
+    // Ruta al script Python
+    const scriptPath = path.join(process.cwd(), 'scripts', 'understat_xg.py');
+    
+    // Preparar input para el script
+    const inputPayload = JSON.stringify({
+      league,
+      home_team: homeTeam,
+      away_team: awayTeam,
+      season: '2025'
+    });
+    
+    // Ejecutar Python script con timeout de 30 segundos
+    const { stdout, stderr } = await execAsync(
+      `echo '${inputPayload}' | python3 "${scriptPath}"`,
+      {
+        timeout: 30000,
+        maxBuffer: 1024 * 1024
+      }
+    );
+    
+    if (stderr && !stderr.includes('Warning')) {
+      console.log(`⚠️ Understat stderr: ${stderr.substring(0, 200)}`);
+    }
+    
+    const understatData: UnderstatXG = JSON.parse(stdout);
+    
+    if (understatData.fallback) {
+      console.log(`⚠️ Understat fallback: ${understatData.error || 'Unknown error'}`);
+      return { understatData, warning: understatData.error };
+    }
+    
+    console.log(`✅ Understat fetched: ${homeTeam} vs ${awayTeam}`);
+    return { understatData };
+    
+  } catch (error: any) {
+    console.log(`⚠️ Understat not available: ${error.message}`);
+    return { 
+      understatData: null, 
+      warning: 'Understat no disponible (Python script falló)' 
+    };
+  }
+}
+
+function formatUnderstatDataForPrompt(understat: UnderstatXG | null): string {
+  if (!understat) {
+    return 'DATOS DE UNDERSTAT NO DISPONIBLES';
+  }
+  
+  if (understat.fallback) {
+    return `UNDERSTAT FALLBACK: ${understat.error || 'Error desconocido'}`;
+  }
+  
+  const lines: string[] = [
+    '═══════════════════════════════════════════════',
+    'DATOS OFICIALES xG DE UNDERSTAT',
+    '═══════════════════════════════════════════════',
+    '',
+    `Liga: ${understat.league}`,
+    `Temporada: ${understat.season}`,
+    '',
+    '── xG/xGA PROMEDIO ──',
+  ];
+  
+  if (understat.home_xG_avg) {
+    lines.push(`${understat.home_team}: xG ${understat.home_xG_avg}/partido`);
+  }
+  if (understat.home_xGA_avg) {
+    lines.push(`${understat.home_team}: xGA ${understat.home_xGA_avg}/partido`);
+  }
+  if (understat.away_xG_avg) {
+    lines.push(`${understat.away_team}: xG ${understat.away_xG_avg}/partido`);
+  }
+  if (understat.away_xGA_avg) {
+    lines.push(`${understat.away_team}: xGA ${understat.away_xGA_avg}/partido`);
+  }
+  
+  lines.push('', '── xG/xGA TOTALES ──');
+  if (understat.home_xG_total) {
+    lines.push(`${understat.home_team}: xG total: ${understat.home_xG_total} (${understat.home_matches || '?'} partidos)`);
+  }
+  if (understat.away_xG_total) {
+    lines.push(`${understat.away_team}: xG total: ${understat.away_xG_total} (${understat.away_matches || '?'} partidos)`);
+  }
+  
+  return lines.join('\n');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1007,13 +1369,14 @@ export async function analyzeMatch(
 ): Promise<AnalysisResult> {
   const { matchName, sport, onProgress } = options;
 
-  // Initialize state
+  // Initialize state with 5 steps (0-4)
   const initialState: AnalysisState = {
-    currentStep: 1,
+    currentStep: 0,
     steps: [
-      { step: 1, status: 'pending', icon: '🔍', message: 'Buscando cuotas en tiempo real...', progress: 15 },
+      { step: 0, status: 'pending', icon: '📊', message: 'SoccerData: Obteniendo stats oficiales (FBref/FotMob)...', progress: 10 },
+      { step: 1, status: 'pending', icon: '🔍', message: 'Buscando cuotas en tiempo real...', progress: 20 },
       { step: 2, status: 'pending', icon: '📡', message: 'Búsqueda paralela (Gemini + Sonar Pro)...', progress: 45 },
-      { step: 3, status: 'pending', icon: '🤖', message: 'Claude Sonnet analizando valor...', progress: 65 },
+      { step: 3, status: 'pending', icon: '🤖', message: 'Claude Sonnet analizando valor...', progress: 70 },
       { step: 4, status: 'pending', icon: '✅', message: 'Grok validando análisis...', progress: 90 }
     ],
     result: null,
@@ -1043,6 +1406,35 @@ export async function analyzeMatch(
   };
 
   // ═══════════════════════════════════════════════════════════════
+  // STEP 0: SOCCERDATA + UNDERSTAT (PYTHON) - OFFICIAL STATS
+  // ═══════════════════════════════════════════════════════════════
+
+  emitProgress(0, 'running');
+  
+  // Ejecutar SoccerData y Understat en paralelo
+  const [soccerDataResult, understatResult] = await Promise.all([
+    fetchSoccerData(matchName, sport),
+    fetchUnderstatData(matchName, sport)
+  ]);
+  
+  const { soccerData, warning: soccerDataWarning } = soccerDataResult;
+  const { understatData, warning: understatWarning } = understatResult;
+  
+  const soccerDataContext = formatSoccerDataForPrompt(soccerData);
+  
+  if (soccerDataWarning) {
+    console.log(`⚠️ Step 0 (SoccerData) warning: ${soccerDataWarning}`);
+  }
+  if (understatWarning) {
+    console.log(`⚠️ Step 0 (Understat) warning: ${understatWarning}`);
+  }
+  
+  console.log(`📊 SoccerData: ${soccerData ? 'OK' : 'FALLBACK'}`);
+  console.log(`📊 Understat: ${understatData ? 'OK' : 'FALLBACK'}`);
+  
+  emitProgress(0, 'completed', soccerDataWarning || understatWarning);
+
+  // ═══════════════════════════════════════════════════════════════
   // STEP 1: THE ODDS API
   // ═══════════════════════════════════════════════════════════════
 
@@ -1062,7 +1454,16 @@ export async function analyzeMatch(
 
   emitProgress(2, 'running');
   
-  const { researchContext, dataQuality, warning: researchWarning } = await runParallelResearch(matchName, sport);
+  const { researchContext: webResearch, dataQuality, warning: researchWarning } = await runParallelResearch(matchName, sport, understatData);
+  
+  // Combinar SoccerData + Understat + Research Web
+  const researchContext = `
+${soccerDataContext}
+
+${formatUnderstatDataForPrompt(understatData)}
+
+${webResearch}
+`;
   
   if (researchWarning) {
     console.log(`⚠️ Step 2 warning: ${researchWarning}`);
