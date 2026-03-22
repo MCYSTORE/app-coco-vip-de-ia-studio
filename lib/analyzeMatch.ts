@@ -745,7 +745,58 @@ intenta al menos 3 fuentes antes.
 
 Investiga estadísticas avanzadas y lesiones para: ${matchName}
 Deporte: ${sport}. Fecha: Marzo 2026.
-Responde SOLO en español con la estructura pedida.`
+Responde SOLO en español con la estructura pedida.
+
+---
+
+BÚSQUEDA OBLIGATORIA DE CORNERS:
+Busca corners con estas queries EXACTAS en este orden:
+
+Query 1:
+"[equipo local] corners per game [liga] 2025 2026
+site:soccerstats.com"
+
+Query 2:
+"[equipo visitante] corners per game [liga] 2025 2026
+site:soccerstats.com"
+
+Query 3:
+"[liga] corner stats 2025 2026 site:betaminic.com"
+
+Query 4:
+"[equipo local] corner stats site:apwin.com"
+
+Query 5:
+"[equipo visitante] corner stats site:apwin.com"
+
+Query 6:
+"[equipo local] [equipo visitante] corners
+site:windrawwin.com"
+
+FORMATO DE RESPUESTA OBLIGATORIO:
+═══════════════════════════
+CORNERS 2025/26:
+├── [Local] corners a favor/partido: X.XX
+├── [Local] corners en contra/partido: X.XX
+├── [Visitante] corners a favor/partido: X.XX
+├── [Visitante] corners en contra/partido: X.XX
+├── Total estimado partido: X.XX
+├── % Over 8.5: XX%
+├── % Over 9.5: XX%
+└── % Over 10.5: XX%
+
+MERCADO CORNERS RECOMENDADO:
+├── Línea: X.5
+├── Selección: Over / Under
+├── Probabilidad estimada: XX%
+└── Edge si cuota ~1.85: +X.X%
+═══════════════════════════
+
+REGLA: Si soccerstats.com falla, usar betaminic.com.
+Si betaminic falla, usar apwin.com.
+Si apwin falla, usar windrawwin.com.
+NO escribir DATO NO ENCONTRADO sin haber
+intentado las 4 fuentes.`
             }
           ]
         })
