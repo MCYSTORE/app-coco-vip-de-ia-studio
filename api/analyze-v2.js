@@ -241,7 +241,39 @@ async function fetchOdds(matchName, sport, oddsApiKey) {
 // STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Sonar Pro + Sonar Pro Corners)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const GEMINI_SYSTEM_PROMPT = `🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+const GEMINI_SYSTEM_PROMPT = `════════════════════════════════════════════════════════════════
+🚨 REGLA CRÍTICA PARA LIGAS SUDAMERICANAS:
+════════════════════════════════════════════════════════════════
+Si el partido es de Argentina, Brasil, Chile, Colombia, Uruguay o Paraguay, buscar en español usando estas fuentes específicas:
+
+Para Argentina (Liga Profesional):
+- Query: '[equipo] últimos partidos Liga Profesional 2026 site:espn.com.ar'
+- Query: '[equipo] forma reciente resultados site:infobae.com'
+- Query: '[equipo] [rival] previa fecha site:ole.com.ar'
+- Query: '[equipo] clasificación tabla posiciones Liga Profesional Argentina 2026'
+
+Para Brasil (Brasileirão):
+- Query: '[equipo] últimos jogos Brasileirão 2026 site:ge.globo.com'
+- Query: '[equipo] classificação tabela Brasileirão 2026'
+
+Para Chile (Primera División):
+- Query: '[equipo] últimos partidos Primera División Chile 2026'
+- Query: '[equipo] clasificación tabla Chile 2026 site:latercera.com'
+
+Fuentes prioritarias para Sudamérica:
+1. espn.com.ar / espn.com.br
+2. ole.com.ar
+3. infobae.com
+4. tycsports.com
+5. ge.globo.com (Brasil)
+6. latercera.com (Chile)
+7. livefutbol.com
+8. bdfa.com.ar (historial H2H Argentina)
+
+⚠️ IMPORTANTE: Las búsquedas en inglés para ligas sudamericanas devuelven resultados vacíos. Siempre buscar en español para estas ligas.
+════════════════════════════════════════════════════════════════
+
+🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
 Traduce cualquier fuente en otro idioma al español.
 Nunca mezcles idiomas en la respuesta.
 
@@ -310,7 +342,22 @@ const CORNERS_SYSTEM_PROMPT = `Eres un extractor de datos deportivos especializa
 Tu única tarea es encontrar estadísticas de corners.
 Devuelve SOLO JSON válido, sin texto adicional, sin markdown, sin explicaciones.
 Si no encuentras un dato, usa null como valor.
-El JSON debe ser parseable por JSON.parse() directamente.`;
+El JSON debe ser parseable por JSON.parse() directamente.
+
+════════════════════════════════════════════════════════════════
+REGLA PARA LIGAS SUDAMERICANAS (Argentina, Brasil, Chile, etc):
+════════════════════════════════════════════════════════════════
+Si el dato de corners del equipo visitante fuera de casa no aparece, buscar en:
+- Query: '[equipo visitante] corners visitante promedio 2026 site:sofascore.com'
+- Query: '[equipo visitante] corners away per game Argentina 2026'
+- Query: '[equipo visitante] corners estadísticas site:livefutbol.com'
+- Query: '[equipo] corners por partido site:promiedos.com.ar'
+
+REGLA DE ESTIMACIÓN:
+Si solo encuentras corners en casa del local pero no fuera del visitante:
+suma_estimada = corners_local_casa × 1.6 (factor estándar para ligas sudamericanas)
+Y marcar tendencia como 'Estimado' en vez de null o 'Sin datos'.
+════════════════════════════════════════════════════════════════`;
 
 async function runParallelResearch(matchName, sport, openrouterKey) {
   console.log('\n📡 STEP 2: Investigación paralela (Gemini + Sonar Pro + Corners)...');
@@ -380,13 +427,23 @@ async function runParallelResearch(matchName, sport, openrouterKey) {
 - Equipo local: ${homeTeam}
 - Equipo visitante: ${awayTeam}
 
-Queries a ejecutar:
-1. '${homeTeam} corners per game 2025-26'
-2. '${awayTeam} corners per game 2025-26'
+Queries a ejecutar (EN ESPAÑOL para ligas sudamericanas):
+1. '${homeTeam} corners por partido 2026'
+2. '${awayTeam} corners por partido 2026'
 3. '${homeTeam} corner statistics sofascore'
 4. '${awayTeam} corner statistics sofascore'
+5. '${homeTeam} corners site:livefutbol.com'
+6. '${awayTeam} corners site:livefutbol.com'
+7. '${homeTeam} corners site:promiedos.com.ar' (para Argentina)
+8. '${awayTeam} corners site:promiedos.com.ar' (para Argentina)
 
-Fuentes: sofascore.com, whoscored.com, fbref.com, footystats.org
+Fuentes prioritarias:
+- sofascore.com
+- livefutbol.com
+- promiedos.com.ar (Argentina)
+- whoscored.com
+- fbref.com
+- footystats.org
 
 Responde SOLO con este formato JSON (sin markdown):
 {
@@ -394,9 +451,11 @@ Responde SOLO con este formato JSON (sin markdown):
   "corners_visitante_fuera": <número o null>,
   "suma_estimada": <número o null>,
   "linea_recomendada": "9.5" o "10.5" o null,
-  "tendencia": "Over" o "Under" o "Sin datos",
+  "tendencia": "Over" o "Under" o "Estimado" o "Sin datos",
   "fuente": "<URL>"
-}` }
+}
+
+Si solo encuentras corners del local pero no del visitante, calcular suma_estimada = corners_local_casa × 1.6` }
           ]
         })
       }).then(r => r.json())
