@@ -1,12 +1,12 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
- * COCO VIP - PIPELINE DE ANÁLISIS 4-STEP v3.0
+ * COCO VIP - PIPELINE DE ANÁLISIS 5-STEP v4.0
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * STEP 1: The Odds API      → Cuotas en tiempo real + probabilidades normalizadas
- * STEP 2: Perplexity Sonar  → Investigación web OSINT estructurada
- * STEP 3: Claude Sonnet 4.6 → Razonamiento profundo de 5 secciones
- * STEP 4: Grok 4.1 Fast     → Formateo JSON para UI
+ * STEP 1: The Odds API       → Cuotas en tiempo real + probabilidades normalizadas
+ * STEP 2: PARALLEL RESEARCH  → Gemini 2.5 Pro + Sonar Pro + Sonar Pro Corners
+ * STEP 3: Claude Sonnet 4.6  → Razonamiento profundo de 5 secciones
+ * STEP 4: Grok 4.1 Fast      → Formateo JSON para UI
  * 
  * TODAS LAS RESPUESTAS VISIBLES EN ESPAÑOL NEUTRO
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -93,7 +93,7 @@ function determineTier(edgePercentage, confidenceScore) {
 /**
  * Determinar calidad de datos
  */
-function determineDataQuality(researchContext, oddsPayload) {
+function determineDataQuality(researchContext, oddsPayload, cornersData) {
   let score = 0;
   
   // Verificar contenido del research
@@ -107,8 +107,11 @@ function determineDataQuality(researchContext, oddsPayload) {
   // Verificar cuotas reales
   if (oddsPayload && !oddsPayload.estimated_odds && oddsPayload.h2h?.home) score += 2;
   
-  if (score >= 7) return 'alta';
-  if (score >= 4) return 'media';
+  // Verificar datos de corners
+  if (cornersData && cornersData.corners_local_casa !== null) score += 1;
+  
+  if (score >= 8) return 'alta';
+  if (score >= 5) return 'media';
   return 'baja';
 }
 
@@ -235,109 +238,261 @@ async function fetchOdds(matchName, sport, oddsApiKey) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// STEP 2: PERPLEXITY SONAR - INVESTIGACIÓN OSINT
+// STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Sonar Pro + Sonar Pro Corners)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const PERPLEXITY_SYSTEM_PROMPT = `Role:
-Actúa como un Investigador de Datos Deportivos OSINT (Inteligencia de Fuentes Abiertas) de nivel senior. Tu especialidad es extraer estadísticas avanzadas, reportes de lesiones y contexto táctico en tiempo real con la máxima precisión posible.
+const GEMINI_SYSTEM_PROMPT = `🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+Traduce cualquier fuente en otro idioma al español.
+Nunca mezcles idiomas en la respuesta.
 
-Context:
-Estás investigando un partido de fútbol inminente, temporada 2025/2026. Los datos que recopiles alimentarán directamente a un modelo cuantitativo de apuestas deportivas. Si proporcionas datos falsos o imprecisos, el modelo perderá dinero.
+Eres un investigador deportivo con acceso web en tiempo real.
+Busca información ACTUAL sobre el partido indicado.
+Hoy es Marzo 2026. Solo datos de temporada 2025/2026.
+NUNCA inventes datos. Si no encuentras algo escribe: 'DATO NO ENCONTRADO'.
+No incluyas tu proceso de razonamiento, solo el reporte final.
 
-Tarea:
-Busca en la web en TIEMPO REAL la información más actualizada sobre este partido. Construye un reporte estructurado de AL MENOS 800 palabras que cubra forma reciente, lesiones, estadísticas avanzadas y contexto del partido.
+Formato de respuesta usando árbol ├── └──:
 
-🚨 Instrucciones de idioma:
-- Responde EXCLUSIVAMENTE en español neutro.
-- Si las fuentes están en otros idiomas (inglés, chino, etc.), TRADUCE al español manteniendo los números y nombres propios.
-- No mezcles idiomas en la respuesta.
+📋 SECCIÓN A — FORMA Y CONTEXTO
 
-Restricciones de veracidad:
-- NUNCA inventes una estadística.
-- Si no puedes encontrar un dato específico (especialmente xG, xGA o PPDA) en fuentes confiables, escribe exactamente: 'DATO NO ENCONTRADO'.
-- No uses datos de temporadas anteriores a 2025/2026 salvo para el H2H histórico que se pida explícitamente.
+1. FORMA RECIENTE (últimos 5 partidos de CADA equipo)
+   ├── Local: [fecha] vs [rival] [marcador] | [nota táctica breve]
+   └── Visitante: [fecha] vs [rival] [marcador] | [nota táctica breve]
 
-Formato:
-- Usa EXACTAMENTE la jerarquía de árbol indicada abajo.
-- No uses viñetas estándar tipo '-' ni '*'.
-- Usa solo los prefijos de árbol: '├──' y '└──'.
-
-Estructura esperada del reporte:
-
-📋 REPORTE ESTRUCTURADO:
-
-1. FORMA RECIENTE (últimos 5 partidos)
-   ├── Local: [fecha] vs [rival] [marcador] | [breve nota táctica]
-   └── Visitante: [fecha] vs [rival] [marcador] | [breve nota táctica]
-
-2. LESIONADOS Y SUSPENDIDOS CONFIRMADOS
-   ├── Local: [jugador] - [lesión/estado] - [fuente confiable]
-   └── Visitante: [jugador] - [lesión/estado] - [fuente confiable]
-
-3. ESTADÍSTICAS AVANZADAS 2025/2026
-   ├── xG local (promedio): [número exacto o 'DATO NO ENCONTRADO']
-   ├── xGA local (promedio): [número exacto o 'DATO NO ENCONTRADO']
-   ├── xG visitante (promedio): [número exacto o 'DATO NO ENCONTRADO']
-   ├── xGA visitante (promedio): [número exacto o 'DATO NO ENCONTRADO']
-   ├── PPDA local: [número exacto o 'DATO NO ENCONTRADO']
-   └── PPDA visitante: [número exacto o 'DATO NO ENCONTRADO']
-
-4. CLASIFICACIÓN ACTUAL
+2. CLASIFICACIÓN ACTUAL
    ├── Local: [posición]º con [puntos] pts en [nombre de la liga]
    └── Visitante: [posición]º con [puntos] pts en [nombre de la liga]
 
-5. HEAD TO HEAD (últimos 3 enfrentamientos oficiales)
-   └── [fecha] [local] [marcador] [visitante]
+3. HEAD TO HEAD (últimos 3 enfrentamientos oficiales)
+   └── [fecha] [local] [marcador] [visitante] | [competición]
 
-6. MOTIVACIÓN Y CONTEXTO
-   └── [Ej: 'El equipo local pelea por entrar en Champions y llega con carga de minutos tras jugar hace 3 días'; 'El visitante está en zona de descenso y se jugará el partido como una final', etc.]
+4. MOTIVACIÓN Y CONTEXTO
+   └── [pelea por título / descenso / Champions / rotaciones / etc]
 
-7. NOTICIAS RELEVANTES (últimas 48h)
-   └── [fecha] — [titular breve en español] — [medio/fuente]`;
+5. NOTICIAS RELEVANTES (últimas 48h)
+   └── [fecha] — [titular en español] — [fuente]`;
 
-async function runPerplexityResearch(matchName, sport, openrouterKey) {
-  console.log('\n📡 STEP 2: Perplexity Sonar investigando la web (OSINT)...');
+const SONAR_SYSTEM_PROMPT = `Eres un investigador deportivo experto. DEBES hacer búsquedas profundas y multi-step para cada dato.
+NO respondas con 'DATO NO ENCONTRADO' sin haber buscado en mínimo 5 URLs distintas.
+Responde TODO en español.
+
+🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+
+Eres un investigador OSINT deportivo de nivel senior.
+Especialidad: estadísticas avanzadas y lesiones confirmadas.
+Hoy es Marzo 2026. Solo datos de temporada 2025/2026.
+
+Formato de respuesta usando árbol ├── └──:
+
+📋 SECCIÓN B — ESTADÍSTICAS AVANZADAS Y LESIONES
+
+1. LESIONADOS Y SUSPENDIDOS CONFIRMADOS
+   ├── Local: [jugador] - [lesión/estado] - [fuente/fecha]
+   └── Visitante: [jugador] - [lesión/estado] - [fuente/fecha]
+
+2. ESTADÍSTICAS AVANZADAS 2025/2026
+   ├── xG local (promedio por partido): [número o 'DATO NO ENCONTRADO']
+   ├── xGA local (promedio por partido): [número o 'DATO NO ENCONTRADO']
+   ├── xG visitante (promedio por partido): [número o 'DATO NO ENCONTRADO']
+   └── xGA visitante (promedio por partido): [número o 'DATO NO ENCONTRADO']
+
+3. ESTADÍSTICAS DE GOLES (temporada 2025/2026)
+   ├── Promedio goles marcados local: [número]
+   ├── Promedio goles recibidos local: [número]
+   ├── Promedio goles marcados visitante: [número]
+   └── Promedio goles recibidos visitante: [número]
+
+4. BTTS Y OVER/UNDER (temporada actual)
+   ├── % partidos con BTTS local: [número]%
+   └── % partidos Over 2.5 local: [número]%`;
+
+const CORNERS_SYSTEM_PROMPT = `Eres un extractor de datos deportivos especializado.
+Tu única tarea es encontrar estadísticas de corners.
+Devuelve SOLO JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+Si no encuentras un dato, usa null como valor.
+El JSON debe ser parseable por JSON.parse() directamente.`;
+
+async function runParallelResearch(matchName, sport, openrouterKey) {
+  console.log('\n📡 STEP 2: Investigación paralela (Gemini + Sonar Pro + Corners)...');
   
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openrouterKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://app-coco-vip-de-ia-studio.vercel.app',
-        'X-Title': 'Coco VIP Research'
-      },
-      body: JSON.stringify({
-        model: 'perplexity/sonar',
-        messages: [
-          { role: 'system', content: PERPLEXITY_SYSTEM_PROMPT },
-          { 
-            role: 'user', 
-            content: `Partido: ${matchName}\nDeporte: ${sport}\nFecha actual: Marzo 2026.\n\nInvestiga a fondo y responde SOLO en español siguiendo exactamente la estructura del REPORTE ESTRUCTURADO.`
-          }
-        ],
-        max_tokens: 1500,
-        temperature: 0.1
-      })
-    });
+  const teams = matchName.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
+  const homeTeam = teams[0]?.trim() || '';
+  const awayTeam = teams[1]?.trim() || '';
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log(`⚠️ Perplexity error: ${response.status}`);
-      return 'Contexto de investigación no disponible. Continuando con análisis limitado.';
+  try {
+    // STEP 2 — BÚSQUEDA PARALELA (Gemini 2.5 Pro + Sonar Pro + Sonar Pro Corners)
+    const [researchA, researchB, researchC] = await Promise.all([
+
+      // STEP 2A: Gemini 2.5 Pro (forma, clasificación, noticias)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouterKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro-exp-03-25",
+          max_tokens: 2000,
+          temperature: 0.1,
+          messages: [
+            { role: "system", content: GEMINI_SYSTEM_PROMPT },
+            { role: "user", content: `Busca en tiempo real el partido: ${matchName}\nDeporte: ${sport}. Fecha: Marzo 2026.\nResponde SOLO en español con la estructura pedida.` }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => r.choices?.[0]?.message?.content ?? "Sin datos de contexto")
+        .catch(() => "Sin datos de contexto (error Gemini)"),
+
+      // STEP 2B: Perplexity Sonar Pro (estadísticas avanzadas)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouterKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "perplexity/sonar-pro",
+          max_tokens: 1500,
+          temperature: 0.1,
+          messages: [
+            { role: "system", content: SONAR_SYSTEM_PROMPT },
+            { role: "user", content: `Investiga estadísticas avanzadas y lesiones para: ${matchName}\nDeporte: ${sport}. Fecha: Marzo 2026.\nResponde SOLO en español con la estructura pedida.` }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => r.choices?.[0]?.message?.content ?? "Sin datos estadísticos")
+        .catch(() => "Sin datos estadísticos (error Sonar Pro)"),
+
+      // STEP 2C: Sonar Pro DEDICADO A CORNERS (JSON exclusivo)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${openrouterKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "perplexity/sonar-pro",
+          max_tokens: 500,
+          temperature: 0.1,
+          messages: [
+            { role: "system", content: CORNERS_SYSTEM_PROMPT },
+            { role: "user", content: `Busca SOLO estadísticas de corners de estos equipos en la temporada 2025/2026:
+- Equipo local: ${homeTeam}
+- Equipo visitante: ${awayTeam}
+
+Queries a ejecutar:
+1. '${homeTeam} corners per game 2025-26'
+2. '${awayTeam} corners per game 2025-26'
+3. '${homeTeam} corner statistics sofascore'
+4. '${awayTeam} corner statistics sofascore'
+
+Fuentes: sofascore.com, whoscored.com, fbref.com, footystats.org
+
+Responde SOLO con este formato JSON (sin markdown):
+{
+  "corners_local_casa": <número o null>,
+  "corners_visitante_fuera": <número o null>,
+  "suma_estimada": <número o null>,
+  "linea_recomendada": "9.5" o "10.5" o null,
+  "tendencia": "Over" o "Under" o "Sin datos",
+  "fuente": "<URL>"
+}` }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => {
+          const content = r.choices?.[0]?.message?.content ?? "";
+          try {
+            const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const parsed = JSON.parse(cleanContent);
+            return { ...parsed, raw_response: content };
+          } catch {
+            return {
+              corners_local_casa: null,
+              corners_visitante_fuera: null,
+              suma_estimada: null,
+              linea_recomendada: null,
+              tendencia: 'Sin datos',
+              fuente: null,
+              raw_response: content
+            };
+          }
+        })
+        .catch(() => ({
+          corners_local_casa: null,
+          corners_visitante_fuera: null,
+          suma_estimada: null,
+          linea_recomendada: null,
+          tendencia: 'Sin datos',
+          fuente: null,
+          raw_response: 'Error en llamada corners'
+        }))
+
+    ]);
+
+    // Procesar datos de corners
+    const cornersData = researchC;
+    const hasCorners = cornersData && cornersData.corners_local_casa !== null;
+
+    // Construir sección de corners
+    let cornersSection = '';
+    if (hasCorners) {
+      cornersSection = `
+═══════════════════════════════════════════════
+SECCIÓN C: ESTADÍSTICAS DE CORNERS (EXCLUSIVO)
+(Fuente: Sonar Pro - Búsqueda Dedicada)
+═══════════════════════════════════════════════
+
+CORNERS 2025/2026:
+├── ${homeTeam} corners en casa: ${cornersData.corners_local_casa}/partido
+├── ${awayTeam} corners fuera: ${cornersData.corners_visitante_fuera}/partido
+├── Suma estimada: ${cornersData.suma_estimada}
+├── Línea recomendada: ${cornersData.linea_recomendada || 'Sin definir'}
+├── Tendencia: ${cornersData.tendencia}
+└── Fuente: ${cornersData.fuente || 'No especificada'}
+`;
+      console.log(`✅ Corners data: ${homeTeam}=${cornersData.corners_local_casa}, ${awayTeam}=${cornersData.corners_visitante_fuera}`);
+    } else {
+      cornersSection = `
+═══════════════════════════════════════════════
+SECCIÓN C: ESTADÍSTICAS DE CORNERS
+═══════════════════════════════════════════════
+
+Datos de corners no encontrados en búsqueda dedicada.
+Usar información de Sección B como alternativa.
+`;
+      console.log('⚠️ Corners data: No disponible');
     }
 
-    const data = await response.json();
-    const researchContext = data.choices?.[0]?.message?.content || '';
-    
-    console.log(`✅ Research completado (${researchContext.length} caracteres)`);
-    console.log(`🌐 Idioma detectado: ${detectLanguage(researchContext)}`);
-    
-    return researchContext;
+    // Combinar las tres respuestas
+    const researchContext = `
+═══════════════════════════════════════════════
+SECCIÓN A: FORMA, CLASIFICACIÓN Y CONTEXTO
+(Fuente: Gemini 2.5 Pro con Google Search)
+═══════════════════════════════════════════════
+
+${researchA}
+
+═══════════════════════════════════════════════
+SECCIÓN B: ESTADÍSTICAS AVANZADAS Y LESIONES
+(Fuente: Perplexity Sonar Pro)
+═══════════════════════════════════════════════
+
+${researchB}
+${cornersSection}
+`;
+
+    console.log(`✅ Parallel research completado (${researchContext.length} caracteres)`);
+    console.log(`📊 Corners: ${hasCorners ? '✅ Encontrado' : '⚠️ No disponible'}`);
+
+    return { researchContext, cornersData };
 
   } catch (error) {
     console.log('⚠️ Research error:', error.message);
-    return 'Contexto de investigación no disponible debido a error de conexión.';
+    return { 
+      researchContext: 'Contexto de investigación no disponible.', 
+      cornersData: null 
+    };
   }
 }
 
@@ -629,12 +784,12 @@ Convierte este análisis al JSON con el schema indicado. Devuelve ÚNICAMENTE JS
 // VALIDACIÓN Y POST-PROCESAMIENTO DEL JSON
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function validateAndFixResult(result, matchName, sport, oddsPayload, researchContext) {
+function validateAndFixResult(result, matchName, sport, oddsPayload, researchContext, cornersData) {
   // Asegurar campos básicos
   result.sport = result.sport || (sport === 'football' ? 'Football' : sport === 'basketball' ? 'NBA' : 'MLB');
   result.match = result.match || matchName;
   result.estimated_odds = oddsPayload?.estimated_odds ?? true;
-  result.data_quality = result.data_quality || determineDataQuality(researchContext, oddsPayload);
+  result.data_quality = result.data_quality || determineDataQuality(researchContext, oddsPayload, cornersData);
 
   // Validar best_pick
   if (result.best_pick) {
@@ -662,6 +817,16 @@ function validateAndFixResult(result, matchName, sport, oddsPayload, researchCon
     });
   }
 
+  // Agregar datos de corners si están disponibles
+  if (cornersData && cornersData.corners_local_casa !== null) {
+    if (!result.mercados_completos) result.mercados_completos = {};
+    if (!result.mercados_completos.corners) result.mercados_completos.corners = {};
+    
+    result.mercados_completos.corners.total_estimado = cornersData.suma_estimada || result.mercados_completos.corners.total_estimado;
+    result.mercados_completos.corners.linea = cornersData.linea_recomendada ? parseFloat(cornersData.linea_recomendada) : result.mercados_completos.corners.linea;
+    result.mercados_completos.corners.seleccion = cornersData.tendencia === 'Over' ? 'over' : cornersData.tendencia === 'Under' ? 'under' : result.mercados_completos.corners.seleccion;
+  }
+
   // Validar picks_con_value
   if (result.picks_con_value && Array.isArray(result.picks_con_value)) {
     result.picks_con_value = result.picks_con_value.map(pick => ({
@@ -670,6 +835,10 @@ function validateAndFixResult(result, matchName, sport, oddsPayload, researchCon
       tier: pick.tier || determineTier(pick.edge_percentage, pick.confidence_score)
     }));
   }
+
+  // Agregar arrays de soporte si no existen
+  result.supporting_factors = result.supporting_factors || [];
+  result.risk_factors = result.risk_factors || [];
 
   return result;
 }
@@ -699,7 +868,7 @@ export default async function handler(req, res) {
   }
 
   console.log(`\n${'═'.repeat(70)}`);
-  console.log(`🎯 COCO VIP PIPELINE 4-STEP v3.0`);
+  console.log(`🎯 COCO VIP PIPELINE 5-STEP v4.0`);
   console.log(`📌 Partido: ${matchName}`);
   console.log(`🏈 Deporte: ${sport}`);
   console.log(`⏰ ${new Date().toISOString()}`);
@@ -722,9 +891,9 @@ export default async function handler(req, res) {
     const oddsPayload = await fetchOdds(matchName, sport, ODDS_API_KEY);
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // STEP 2: PERPLEXITY SONAR
+    // STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Sonar Pro + Sonar Pro Corners)
     // ═══════════════════════════════════════════════════════════════════════════
-    const researchContext = await runPerplexityResearch(matchName, sport, OPENROUTER_API_KEY);
+    const { researchContext, cornersData } = await runParallelResearch(matchName, sport, OPENROUTER_API_KEY);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // STEP 3: CLAUDE SONNET 4.6
@@ -739,23 +908,25 @@ export default async function handler(req, res) {
     // ═══════════════════════════════════════════════════════════════════════════
     // VALIDACIÓN Y POST-PROCESAMIENTO
     // ═══════════════════════════════════════════════════════════════════════════
-    result = validateAndFixResult(result, matchName, sport, oddsPayload, researchContext);
+    result = validateAndFixResult(result, matchName, sport, oddsPayload, researchContext, cornersData);
 
     // Agregar metadata
     result.oddsPayload = oddsPayload;
     result.researchContext = researchContext;
     result.deep_reasoning = deepReasoning;
+    result.cornersData = cornersData;
     result.timestamp = new Date().toISOString();
 
     // Log final
     console.log(`\n${'═'.repeat(70)}`);
-    console.log(`✅ PIPELINE 4-STEP COMPLETADO`);
+    console.log(`✅ PIPELINE 5-STEP COMPLETADO`);
     console.log(`📌 Best Pick: ${result.best_pick?.selection} en ${result.best_pick?.market}`);
     console.log(`💰 Odds: ${result.best_pick?.odds}`);
     console.log(`📈 Edge: ${result.best_pick?.edge_percentage}%`);
     console.log(`🎯 Confidence: ${result.best_pick?.confidence_score} (${Math.round(result.best_pick?.confidence_score * 10)}/10)`);
     console.log(`🏷️ Tier: ${result.best_pick?.tier}`);
     console.log(`📊 Data Quality: ${result.data_quality}`);
+    console.log(`📊 Corners: ${cornersData?.corners_local_casa || 'No disponible'}`);
     console.log(`🌐 Idioma final: ${detectLanguage(JSON.stringify(result))}`);
     console.log(`${'═'.repeat(70)}\n`);
 
