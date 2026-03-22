@@ -274,6 +274,17 @@ PASO 2 — MERCADOS A ANALIZAR (en orden de prioridad)
    xG_estimado = xG_local + xG_visitante del contexto
    Comparar con línea. Analizar 1.5 / 2.5 / 3.5.
 
+   ANÁLISIS DE CORNERS (obligatorio):
+   - Promedio de corners por partido local (en casa): [número]
+   - Promedio de corners por partido visitante (fuera): [número]
+   - Suma estimada de corners del partido: [número]
+   - Línea habitual de mercado: 9.5 o 10.5
+   - % partidos Over 9.5 corners local + visitante combinado
+   - Estilo de juego: equipos de presión alta generan más corners
+   - Si el contexto no trae el dato: estímalo con el estilo
+     táctico (pressing alto → Over, bloque bajo → Under)
+   - EV y Kelly para el mercado de corners si edge >= 3%
+
 3. AMBOS ANOTAN — solo fútbol
    prob_btts = prob_local_anota × prob_visitante_anota
    Cruzar con clean sheets y failed_to_score del contexto.
@@ -571,9 +582,24 @@ Formato de respuesta usando árbol ├── └──:
             },
             {
               role: "user",
-              content: `Investiga estadísticas avanzadas y lesiones para: ${matchName}
+              content: `Busca xG y xGA en estas fuentes EN ESTE ORDEN:
+1. fotmob.com/leagues (tiene xG por equipo gratis)
+2. sofascore.com (estadísticas de temporada)
+3. whoscored.com
+4. understat.com
+5. fbref.com
+
+Para cada equipo busca:
+'[nombre equipo] xG 2025 2026 Premier League'
+'[nombre equipo] expected goals per game 2026'
+
+Si encuentras el dato en cualquier fuente, úsalo.
+Solo escribe DATO NO ENCONTRADO si falló en TODAS.
+
+---
+
+Investiga estadísticas avanzadas y lesiones para: ${matchName}
 Deporte: ${sport}. Fecha: Marzo 2026.
-Busca en FBref, Understat, SofaScore, WhoScored.
 Responde SOLO en español con la estructura pedida.`
             }
           ]
@@ -841,10 +867,40 @@ async function runFinalValidation(
         messages: [
           {
             role: 'system',
-            content: `Eres un validador de análisis deportivos. Verifica que el JSON recibido:
+            content: `REGLA CRÍTICA DE confidence_score:
+- El valor SIEMPRE debe estar entre 0.0 y 1.0.
+- La UI multiplica por 10 para mostrar '/10'.
+- Ejemplos correctos: 0.72 → se verá como 7.2/10
+- Ejemplos PROHIBIDOS: 7, 7.2, 72, 720, 850.
+- Si tu cálculo da un número mayor a 1,
+  divídelo entre 10 antes de escribirlo en el JSON.
+- Esta regla aplica a TODOS los confidence_score
+  del JSON: best_pick y cada mercado.
+
+---
+
+Eres un validador de análisis deportivos. Verifica que el JSON recibido:
 1. Tiene todos los campos requeridos
 2. Los valores numéricos están en rangos lógicos
 3. edge_percentage y confidence_score son coherentes
+
+Los siguientes campos son OBLIGATORIOS y no pueden
+quedar vacíos o null. Si el razonamiento no los
+menciona explícitamente, INFIERE un valor razonable
+basado en el análisis:
+
+'proyeccion_final': {
+  'resultado_probable': string,   // '1' o 'X' o '2'
+  'marcador_estimado': string,    // Ej: '2-1' o '1-0'
+  'rango_total_goles': string,    // Ej: '2-3 goles'
+  'btts_probable': boolean,       // true o false
+  'confianza_proyeccion': number  // entre 0.0 y 1.0
+}
+
+Regla: si el pick es victoria local con prob 62%,
+el marcador estimado debería reflejarlo (ej: '2-1').
+Nunca dejar este bloque vacío.
+
 Si algo está mal, corrígelo. Responde SOLO con el JSON corregido.`
           },
           {
