@@ -40,7 +40,7 @@ export default function LoginScreen({ onNavigate }: LoginScreenProps) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundColor: 'var(--color-bg-primary)' }}>
+    <div className="min-h-screen flex flex-col items-center justify-center p-6" style={{ backgroundImage: 'url(https://i.ibb.co/tThL6Stm/image.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
       <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mb-8">
         <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-xl" style={{ background: 'linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-secondary))' }}>
           <Sparkles className="w-10 h-10 text-white" />
