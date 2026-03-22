@@ -598,6 +598,37 @@ Solo escribe DATO NO ENCONTRADO si falló en TODAS.
 
 ---
 
+CORNERS — Buscar obligatoriamente para cada equipo:
+- Promedio de corners por partido jugando en casa
+- Promedio de corners por partido jugando de visitante
+- Total de corners en los últimos 5 partidos
+- H2H: corners totales en últimos 3 enfrentamientos
+
+Queries a usar:
+'[equipo local] corners per game [liga] 2025 2026'
+'[equipo visitante] corners per game [liga] 2025 2026'
+'[local] vs [visitante] corners head to head'
+
+Fuentes en orden de prioridad:
+1. sofascore.com
+2. fotmob.com
+3. whoscored.com
+4. flashscore.com
+
+Formato de respuesta obligatorio:
+CORNERS:
+- Local promedio en casa: X.X/partido
+- Visitante promedio fuera: X.X/partido
+- Suma estimada partido: X.X
+- Línea de mercado sugerida: 9.5 o 10.5
+- Tendencia: Over / Under / Neutral
+
+Si no encuentras el dato en ninguna fuente,
+escribe: 'CORNERS: DATO NO ENCONTRADO' pero
+intenta al menos 3 fuentes antes.
+
+---
+
 Investiga estadísticas avanzadas y lesiones para: ${matchName}
 Deporte: ${sport}. Fecha: Marzo 2026.
 Responde SOLO en español con la estructura pedida.`
