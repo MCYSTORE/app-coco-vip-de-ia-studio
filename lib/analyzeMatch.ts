@@ -512,13 +512,24 @@ NUNCA usar datos de temporadas anteriores a 2025/2026
 NUNCA kelly_stake_units > 0.25`;
 
 // ═══════════════════════════════════════════════════════════════
-// STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Perplexity Sonar Pro)
+// STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Perplexity Sonar Pro + Sonar Pro Corners)
 // ═══════════════════════════════════════════════════════════════
 
 interface Step2Result {
   researchContext: string;
   dataQuality: 'alta' | 'media' | 'baja';
   warning?: string;
+  cornersData?: CornersData;
+}
+
+interface CornersData {
+  corners_local_casa: number | null;
+  corners_visitante_fuera: number | null;
+  suma_estimada: number | null;
+  linea_recomendada: string | null;
+  tendencia: 'Over' | 'Under' | 'Sin datos';
+  fuente: string | null;
+  raw_response?: string;
 }
 
 async function runParallelResearch(
@@ -537,8 +548,13 @@ async function runParallelResearch(
   }
 
   try {
-    // STEP 2 — BÚSQUEDA PARALELA (Gemini 2.5 Pro + Perplexity Sonar Pro)
-    const [researchA, researchB] = await Promise.all([
+    // Parsear equipos del matchName para el prompt de corners
+    const teams = matchName.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
+    const homeTeam = teams[0]?.trim() || '';
+    const awayTeam = teams[1]?.trim() || '';
+
+    // STEP 2 — BÚSQUEDA PARALELA (Gemini 2.5 Pro + Perplexity Sonar Pro + Sonar Pro Corners)
+    const [researchA, researchB, researchC] = await Promise.all([
 
       // ── LLAMADA A: Gemini 2.5 Pro (forma reciente, clasificación, noticias)
       fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -802,11 +818,131 @@ intentado las 4 fuentes.`
         })
       }).then(r => r.json())
         .then(r => r.choices?.[0]?.message?.content ?? "Sin datos estadísticos")
-        .catch(() => "Sin datos estadísticos (error Sonar Pro)")
+        .catch(() => "Sin datos estadísticos (error Sonar Pro)"),
+
+      // ── LLAMADA C: Sonar Pro DEDICADO A CORNERS (JSON exclusivo)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "perplexity/sonar-pro",
+          search_type: "pro",
+          max_tokens: 500,
+          temperature: 0.1,
+          messages: [
+            {
+              role: "system",
+              content: `Eres un extractor de datos deportivos especializado.
+Tu única tarea es encontrar estadísticas de corners.
+Devuelve SOLO JSON válido, sin texto adicional, sin markdown, sin explicaciones.
+Si no encuentras un dato, usa null como valor.
+El JSON debe ser parseable por JSON.parse() directamente.`
+            },
+            {
+              role: "user",
+              content: `Busca SOLO estadísticas de corners de estos equipos en la temporada 2025/2026:
+- Equipo local: ${homeTeam}
+- Equipo visitante: ${awayTeam}
+
+Queries a ejecutar en este orden:
+1. '${homeTeam} corners per game 2025-26 La Liga'
+2. '${awayTeam} corners per game 2025-26 La Liga'
+3. '${homeTeam} ${awayTeam} corners h2h'
+4. '${homeTeam} corner statistics sofascore'
+5. '${awayTeam} corner statistics sofascore'
+
+Fuentes prioritarias:
+1. sofascore.com
+2. whoscored.com
+3. fbref.com
+4. footystats.org
+5. understat.com
+
+Responde SOLO con este formato JSON (sin markdown, sin código):
+{
+  "corners_local_casa": <número o null>,
+  "corners_visitante_fuera": <número o null>,
+  "suma_estimada": <número o null>,
+  "linea_recomendada": "9.5" o "10.5" o null,
+  "tendencia": "Over" o "Under" o "Sin datos",
+  "fuente": "<URL donde encontraste el dato>"
+}
+
+No escribas nada más. Solo el JSON. Sin backticks, sin explicaciones.`
+            }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => {
+          const content = r.choices?.[0]?.message?.content ?? "";
+          // Intentar parsear el JSON de la respuesta
+          try {
+            // Limpiar posibles caracteres de markdown
+            const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const parsed = JSON.parse(cleanContent);
+            return { ...parsed, raw_response: content };
+          } catch {
+            // Si falla el parseo, devolver objeto con raw_response
+            return {
+              corners_local_casa: null,
+              corners_visitante_fuera: null,
+              suma_estimada: null,
+              linea_recomendada: null,
+              tendencia: 'Sin datos',
+              fuente: null,
+              raw_response: content
+            };
+          }
+        })
+        .catch(() => ({
+          corners_local_casa: null,
+          corners_visitante_fuera: null,
+          suma_estimada: null,
+          linea_recomendada: null,
+          tendencia: 'Sin datos',
+          fuente: null,
+          raw_response: 'Error en llamada corners'
+        }))
 
     ]);
 
-    // Combinar ambas respuestas en una sola variable para Step 3
+    // Procesar datos de corners (researchC)
+    const cornersData: CornersData = researchC as CornersData;
+
+    // Construir sección de corners para el contexto
+    let cornersSection = '';
+    const hasCorners = cornersData && cornersData.corners_local_casa !== null;
+    
+    if (hasCorners) {
+      cornersSection = `
+═══════════════════════════════════════════════
+SECCIÓN C: ESTADÍSTICAS DE CORNERS (EXCLUSIVO)
+(Fuente: Sonar Pro - Búsqueda Dedicada)
+═══════════════════════════════════════════════
+
+CORNERS 2025/2026:
+├── ${homeTeam} corners en casa: ${cornersData.corners_local_casa}/partido
+├── ${awayTeam} corners fuera: ${cornersData.corners_visitante_fuera}/partido
+├── Suma estimada: ${cornersData.suma_estimada}
+├── Línea recomendada: ${cornersData.linea_recomendada || 'Sin definir'}
+├── Tendencia: ${cornersData.tendencia}
+└── Fuente: ${cornersData.fuente || 'No especificada'}
+`;
+    } else {
+      cornersSection = `
+═══════════════════════════════════════════════
+SECCIÓN C: ESTADÍSTICAS DE CORNERS
+═══════════════════════════════════════════════
+
+Datos de corners no encontrados en búsqueda dedicada.
+Usar información de Sección B como alternativa.
+`;
+    }
+
+    // Combinar las tres respuestas en una sola variable para Step 3
     const researchContext = `
 ═══════════════════════════════════════════════
 SECCIÓN A: FORMA, CLASIFICACIÓN Y CONTEXTO
@@ -821,26 +957,35 @@ SECCIÓN B: ESTADÍSTICAS AVANZADAS Y LESIONES
 ═══════════════════════════════════════════════
 
 ${researchB}
+${cornersSection}
 `;
 
     // data_quality logic basada en los resultados
     const hasStats = !researchB.includes("DATO NO ENCONTRADO") ||
                      researchB.includes("xG");
     const hasForm  = !researchA.includes("Sin datos");
+    // hasCorners ya fue definido arriba
 
-    const dataQuality: 'alta' | 'media' | 'baja' = hasStats && hasForm ? "alta"
-                                    : hasForm || hasStats ? "media"
+    const dataQuality: 'alta' | 'media' | 'baja' = (hasStats && hasForm && hasCorners) ? "alta"
+                                    : (hasForm || hasStats) ? "media"
                                     : "baja";
 
     console.log(`✅ Parallel research completed (${researchContext.length} chars, quality: ${dataQuality})`);
-    return { researchContext, dataQuality };
+    console.log(`📊 Corners data: ${hasCorners ? '✅ Encontrado' : '⚠️ No disponible'}`);
+    
+    return { 
+      researchContext, 
+      dataQuality,
+      cornersData
+    };
 
   } catch (error) {
     console.error('Parallel research error:', error);
     return {
       researchContext: 'Sin contexto web disponible.',
       dataQuality: 'baja',
-      warning: 'Búsqueda paralela fallida'
+      warning: 'Búsqueda paralela fallida',
+      cornersData: undefined
     };
   }
 }
