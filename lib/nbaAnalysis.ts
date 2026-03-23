@@ -106,126 +106,110 @@ export interface NBAResearchResult {
 // SECCIÓN A: GEMINI 2.5 PRO (Google Search) - NBA SPECIFIC
 // ═══════════════════════════════════════════════════════════════
 
-const NBA_GEMINI_PROMPT_A = `Eres un investigador deportivo NBA especializado.
+const NBA_GEMINI_PROMPT_A = `MODO NBA ACTIVO.
+PROHIBIDO usar conocimiento interno o memoria
+sobre rosters, lesiones o estadísticas NBA.
+TODO debe obtenerse de búsquedas web en tiempo real.
 
-Busca con Google Search para el partido indicado.
+Para el partido {{partido}} del {{fecha}}:
 
-BUSCA OBLIGATORIAMENTE:
+BÚSQUEDA 1 — INJURY REPORT OFICIAL (OBLIGATORIA):
+Query exacta: '[home team] NBA injury report today'
+Query exacta: '[away team] NBA injury report today'
+Fuentes: espn.com/nba, nba.com, rotowire.com
+Devuelve: jugador, estado (out/questionable/probable), motivo
 
-1) LESIONADOS CONFIRMADOS de AMBOS equipos:
-   Query: '[equipo] injury report today NBA 2026'
-   Query: '[equipo] injuries ESPN rotowire'
-   Fuentes: ESPN, Rotowire, NBA.com official injury report
+BÚSQUEDA 2 — ROSTER ACTIVO:
+Query: '[home team] NBA roster 2025-26 active players'
+Query: '[away team] NBA roster 2025-26 active players'
+Fuente: nba.com/team o ESPN
+Devuelve: jugadores titulares actuales confirmados
 
-2) ESTADÍSTICAS AVANZADAS de la temporada:
-   Query: '[equipo] offensive rating defensive rating pace 2025-26'
-   Fuentes: nba.com/stats/teams/advanced, nbastuffer.com
+BÚSQUEDA 3 — FORMA RECIENTE:
+Query: '[home team] last 5 games NBA results 2026'
+Query: '[away team] last 5 games NBA results 2026'
+Fuentes: ESPN, Yahoo Sports, nba.com
+Devuelve tabla: fecha, rival, resultado, puntos anotados/recibidos
 
-3) FORMA RECIENTE (últimos 5 partidos):
-   Query: '[equipo] last 5 games results NBA'
-   Devuelve: fecha, rival, resultado, puntos anotados/recibidos
+BÚSQUEDA 4 — ESTADÍSTICAS AVANZADAS:
+Query: '[home team] offensive rating defensive rating pace NBA 2025-26'
+Query: '[away team] offensive rating defensive rating pace NBA 2025-26'
+Fuentes: nba.com/stats/teams/advanced, nbastuffer.com
+Devuelve: oRTG, dRTG, NetRTG, Pace
 
-4) BACK-TO-BACK o FATIGA:
-   Query: '[equipo] schedule back to back march 2026'
+BÚSQUEDA 5 — BACK TO BACK:
+Query: '[home team] NBA schedule [fecha] back to back'
+Query: '[away team] NBA schedule [fecha] back to back'
+Devuelve: si el partido es 2do en 2 noches o 3ro en 4
 
-REGLAS:
-- No devuelvas 'Sin datos de contexto'.
-- Si Google Search no responde, intenta 3 queries distintas antes de declarar que no hay datos.
-- Responde TODO EN ESPAÑOL.
-- Usa el formato de árbol ├── └── para estructurar la respuesta.
-
-FORMATO DE RESPUESTA:
-
-📋 SECCIÓN A — FORMA, LESIONES Y CONTEXTO NBA
-
-1. FORMA RECIENTE (últimos 5 partidos de CADA equipo)
-   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
-   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
-   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
-   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
-   └── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
-   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
-   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
-   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
-   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
-   └── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
-
-2. LESIONADOS Y ESTADO (OBLIGATORIO)
-   ├── [Local]: [jugador] - [Out/Questionable/Probable] - [motivo]
-   └── [Visitante]: [jugador] - [Out/Questionable/Probable] - [motivo]
-   (Si no hay lesionados: 'Plantilla completa según [fuente]')
-
-3. CONTEXTO DE CALENDARIO
-   ├── [Local]: Back-to-back: [Sí/No] | 3 en 4 noches: [Sí/No]
-   └── [Visitante]: Back-to-back: [Sí/No] | 3 en 4 noches: [Sí/No]
-
-4. NOTICIAS RELEVANTES (últimas 48h)
-   ├── [fecha] — [titular] — [fuente]
-   └── [fecha] — [titular] — [fuente]`;
+REGLAS ABSOLUTAS:
+- Si una búsqueda falla, intenta 2 queries alternativas.
+- NUNCA escribir 'Sin datos de contexto'.
+- NUNCA mencionar jugadores sin confirmar con búsqueda.
+- Realiza TODAS las búsquedas en INGLÉS.
+- Traduce TODO al español antes de responder.
+- Mantén en inglés SOLO nombres de jugadores,
+  equipos y términos técnicos: oRTG, dRTG, NetRTG,
+  Pace, eFG%, ATS, PRA, back-to-back.
+- Todo lo demás en español neutro.`;
 
 // ═══════════════════════════════════════════════════════════════
 // SECCIÓN B: SONAR PRO - ESTADÍSTICAS AVANZADAS NBA
 // ═══════════════════════════════════════════════════════════════
 
-const NBA_SONAR_PROMPT_B = `Eres un investigador OSINT deportivo de nivel senior.
-Especialidad: estadísticas avanzadas NBA y lesiones confirmadas.
+const NBA_SONAR_PROMPT_B = `MODO NBA ACTIVO.
+PROHIBIDO usar memoria interna sobre rosters
+o estadísticas. TODO desde búsquedas reales.
 
-Hoy es Marzo 2026. Temporada NBA 2025-2026.
+BÚSQUEDAS EN INGLÉS — RESPUESTA EN ESPAÑOL.
 
-ESTADÍSTICAS AVANZADAS NBA (OBLIGATORIO):
-Busca para cada equipo:
-  - Offensive Rating (oRTG): puntos por 100 posesiones
-  - Defensive Rating (dRTG): puntos permitidos por 100 posesiones
-  - Net Rating: oRTG - dRTG
-  - Pace: posesiones por 48 minutos
-  - eFG%: effective field goal percentage
-
+BÚSQUEDA 1 — ESTADÍSTICAS AVANZADAS:
+Query: '[home team] offensive rating defensive rating pace 2025-26'
+Query: '[away team] offensive rating defensive rating pace 2025-26'
 Fuentes en orden:
-1. https://www.nba.com/stats/teams/advanced
-2. https://www.nbastuffer.com/2025-2026-nba-team-stats/
-3. https://www.espn.com/nba/hollinger/teamstats
+1. nba.com/stats/teams/advanced
+2. nbastuffer.com/2025-2026-nba-team-stats
+3. espn.com/nba/hollinger/teamstats
 
-LESIONADOS (OBLIGATORIO):
-Busca injury report oficial:
-  Query: '[equipo] NBA injury report [fecha]'
-  Query: '[equipo] out questionable doubtful tonight'
-  Fuentes: ESPN, Rotowire, NBA.com
+BÚSQUEDA 2 — LESIONADOS OFICIALES:
+Query: '[home team] NBA injury report [fecha]'
+Query: '[away team] NBA injury report [fecha]'
+Query: '[home team] out questionable tonight NBA'
+Query: '[away team] out questionable tonight NBA'
+Fuentes en orden:
+1. rotowire.com/basketball/nba-lineups
+2. espn.com/nba (injury report)
+3. nba.com (official status)
 
-TENDENCIAS DE MERCADO:
-  - Récord ATS (Against The Spread)
-  - % de partidos Over/Under
+BÚSQUEDA 3 — TENDENCIAS DE MERCADO:
+Query: '[home team] NBA over under record 2025-26'
+Query: '[away team] NBA ATS record 2025-26'
+Fuentes: covers.com, teamrankings.com
 
-REGLAS:
-- NO buscar corners en NBA.
-- NO usar campos xG/xGA.
-- NO escribir DATO NO ENCONTRADO sin buscar en mínimo 3 fuentes distintas.
-- Responde TODO EN ESPAÑOL.
-- Usa el formato de árbol ├── └──.
+FORMATO OBLIGATORIO DE RESPUESTA:
+STATS AVANZADAS:
+├── [Local] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
+└── [Visitante] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
 
-FORMATO DE RESPUESTA OBLIGATORIO:
+LESIONADOS:
+├── [Local]: jugador - estado - fuente
+└── [Visitante]: jugador - estado - fuente
 
-📋 SECCIÓN B — ESTADÍSTICAS AVANZADAS Y TENDENCIAS NBA
+TENDENCIAS:
+├── [Local] Over/Under record: XX-XX
+└── [Visitante] Over/Under record: XX-XX
 
-1. STATS AVANZADAS 2025-26:
-   ├── [Local] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
-   └── [Visitante] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
-
-2. PUNTOS PROMEDIO:
-   ├── [Local]: PPG temporada: X.X | PPG últimos 10: X.X
-   ├── [Local]: Puntos permitidos: X.X
-   ├── [Visitante]: PPG temporada: X.X | PPG últimos 10: X.X
-   └── [Visitante]: Puntos permitidos: X.X
-
-3. LESIONADOS CONFIRMADOS:
-   ├── [Local]: [jugador] - [estado] - [fuente]
-   └── [Visitante]: [jugador] - [estado] - [fuente]
-
-4. TENDENCIAS ATS:
-   ├── [Local] ATS: X-X | % Over: XX%
-   └── [Visitante] ATS: X-X | % Over: XX%
-
-5. PATRONES RECIENTES:
-   └── [Descripción de rachas o tendencias detectadas]`;
+REGLAS ABSOLUTAS:
+- PROHIBIDO campos xG, xGA, BTTS, corners en NBA.
+- PROHIBIDO usar datos de memoria sin búsqueda.
+- PROHIBIDO mencionar jugadores sin verificar roster.
+- Si un dato falla en fuente 1, ir a fuente 2 y 3.
+- Solo escribir DATO NO ENCONTRADO si fallaron
+  todas las fuentes disponibles.
+- Búsquedas en INGLÉS, respuesta en ESPAÑOL.
+- Mantén en inglés solo: nombres de jugadores,
+  equipos y términos técnicos (oRTG, dRTG, Pace,
+  eFG%, ATS, PRA, back-to-back).`;
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN FUNCTION: NBA RESEARCH (PARALLEL CALLS)
