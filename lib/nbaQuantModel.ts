@@ -171,7 +171,30 @@ INSTRUCCIONES DE CÁLCULO:
    - Datos respaldados en el informe.
    - confidence_score SIEMPRE entre 0.0 y 1.0.
 
-REGLAS:
+═══════════════════════════════════════════════
+REGLA CRÍTICA DE PROBABILIDAD:
+═══════════════════════════════════════════════
+El edge máximo aceptable es 20%.
+Si el cálculo devuelve edge > 20%, aplica este ajuste:
+
+1) Recalcula la probabilidad usando oRTG/dRTG reales:
+   prob_home = 0.50 + (NetRTG_home - NetRTG_away) × 0.02 + 0.03 (bonus localía fija)
+
+2) NO uses solo el récord general como base.
+   El récord general sobreestima probabilidades.
+
+3) Ajusta siempre por:
+   - Lesiones confirmadas (-5% si hay estrella fuera)
+   - Back-to-back (-3%)
+   - H2H reciente (±2%)
+
+4) Edge máximo permitido: 20%.
+   Si supera 20%, reporta 20% y añade nota:
+   'Edge ajustado por límite de confianza del modelo'
+
+═══════════════════════════════════════════════
+REGLAS DE FORMATO:
+═══════════════════════════════════════════════
 - Devuelve SOLO el JSON, sin texto adicional.
 - No cambies el nombre de ningún campo del schema.
 - confidence_score SIEMPRE entre 0.0 y 1.0.

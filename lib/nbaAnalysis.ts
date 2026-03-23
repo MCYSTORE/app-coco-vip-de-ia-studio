@@ -4,10 +4,11 @@
  * Step independiente para análisis de partidos NBA.
  * NO modifica los steps existentes del pipeline de fútbol.
  * 
- * Este módulo genera un informe de datos en texto plano que
- * otro modelo usará para construir proyecciones de apuestas.
+ * Pipeline NBA:
+ * - Sección A: Gemini 2.5 Pro (Google Search) - Forma, lesiones, contexto
+ * - Sección B: Perplexity Sonar Pro - Estadísticas avanzadas
  * 
- * Modelo usado: Perplexity Sonar Pro (web search en tiempo real)
+ * Modelo usado: Gemini 2.5 Pro + Perplexity Sonar Pro (parallel calls)
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -48,8 +49,6 @@ export interface NBATeamStats {
   avgPointsScoredLast10: number | null;
   avgPointsAllowedLast10: number | null;
   eFGPercent: number | null;
-  threePAR: number | null;
-  FTAR: number | null;
 }
 
 export interface NBAInjuryReport {
@@ -104,77 +103,132 @@ export interface NBAResearchResult {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// NBA RESEARCH SYSTEM PROMPT
+// SECCIÓN A: GEMINI 2.5 PRO (Google Search) - NBA SPECIFIC
 // ═══════════════════════════════════════════════════════════════
 
-const NBA_RESEARCH_PROMPT = `Eres un agente de INVESTIGACIÓN NBA.
+const NBA_GEMINI_PROMPT_A = `Eres un investigador deportivo NBA especializado.
 
-OBJETIVO:
-Devolver un INFORME DE DATOS en texto plano (no JSON) que otro modelo usará
-para construir las proyecciones de apuestas. Todo debe estar en ESPAÑOL.
+Busca con Google Search para el partido indicado.
 
-Sigue este plan paso a paso:
+BUSCA OBLIGATORIAMENTE:
 
-1) FORMA RECIENTE (últimos 5 partidos por equipo)
-   - Usa nba.com/stats, ESPN y Yahoo Sports.
-   - Para cada equipo devuelve una tabla con:
-     - Fecha
-     - Rival
-     - Local/Visitante
-     - Resultado final (ej: 118-112)
-     - Puntos anotados y recibidos
-     - Si cubrió el spread (si el dato está disponible).
+1) LESIONADOS CONFIRMADOS de AMBOS equipos:
+   Query: '[equipo] injury report today NBA 2026'
+   Query: '[equipo] injuries ESPN rotowire'
+   Fuentes: ESPN, Rotowire, NBA.com official injury report
 
-2) ESTADÍSTICAS AVANZADAS DE EQUIPO
-   Fuentes:
-     - https://www.nba.com/stats/teams/advanced
-     - https://www.nbastuffer.com/2025-2026-nba-team-stats/
-     - https://www.espn.com/nba/hollinger/teamstats
+2) ESTADÍSTICAS AVANZADAS de la temporada:
+   Query: '[equipo] offensive rating defensive rating pace 2025-26'
+   Fuentes: nba.com/stats/teams/advanced, nbastuffer.com
 
-   Para CADA equipo devuelve:
-     - Offensive Rating (temporada y últimos 10)
-     - Defensive Rating
-     - Net Rating
-     - Pace (posesiones por 48)
-     - Puntos promedio anotados (temporada / últimos 10)
-     - Puntos promedio recibidos (temporada / últimos 10)
-     - eFG%, 3PAr y FTr si están disponibles.
+3) FORMA RECIENTE (últimos 5 partidos):
+   Query: '[equipo] last 5 games results NBA'
+   Devuelve: fecha, rival, resultado, puntos anotados/recibidos
 
-3) LESIONADOS Y DESCANSO
-   - Busca en ESPN, Rotowire, NBA.com:
-     "[equipo] injuries"
-   - Lista:
-     - Jugadores Fuera, Cuestionables, Probables
-     - Motivo (lesión, descanso, etc.)
-   - Indica si es:
-     - back-to-back
-     - 3 en 4 noches
-     - 4 en 6 noches
-
-4) TENDENCIAS DE MERCADO
-   - Porcentaje Over/Under de cada equipo
-   - Récord ATS de cada equipo
-   - Patrones relevantes de totales recientes.
-
-5) RESUMEN PARA MODELO CUANTITATIVO
-   - Ritmo esperado del partido
-   - Nivel ofensivo y defensivo de cada equipo
-   - Impacto de lesiones y descanso
-   - Patrones fuertes: rachas Over/Under, ATS, etc.
+4) BACK-TO-BACK o FATIGA:
+   Query: '[equipo] schedule back to back march 2026'
 
 REGLAS:
-- No inventes números. Si falta un dato, dilo explícitamente.
-- Usa fuentes oficiales primero (nba.com, ESPN, NBAstuffer).
-- Responde solo con el informe en texto, sin JSON.
-- Idioma: ESPAÑOL.
+- No devuelvas 'Sin datos de contexto'.
+- Si Google Search no responde, intenta 3 queries distintas antes de declarar que no hay datos.
+- Responde TODO EN ESPAÑOL.
+- Usa el formato de árbol ├── └── para estructurar la respuesta.
 
-ANCLA TEMPORAL:
-Hoy es Marzo 2026. Temporada NBA 2025-2026.
-Todo análisis se basa EXCLUSIVAMENTE en datos de la temporada 2025-2026.
-PROHIBIDO usar datos de temporadas anteriores.`;
+FORMATO DE RESPUESTA:
+
+📋 SECCIÓN A — FORMA, LESIONES Y CONTEXTO NBA
+
+1. FORMA RECIENTE (últimos 5 partidos de CADA equipo)
+   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
+   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
+   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
+   ├── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
+   └── [Local]: [fecha] vs [rival] [marcador] | [nota breve]
+   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
+   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
+   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
+   ├── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
+   └── [Visitante]: [fecha] vs [rival] [marcador] | [nota breve]
+
+2. LESIONADOS Y ESTADO (OBLIGATORIO)
+   ├── [Local]: [jugador] - [Out/Questionable/Probable] - [motivo]
+   └── [Visitante]: [jugador] - [Out/Questionable/Probable] - [motivo]
+   (Si no hay lesionados: 'Plantilla completa según [fuente]')
+
+3. CONTEXTO DE CALENDARIO
+   ├── [Local]: Back-to-back: [Sí/No] | 3 en 4 noches: [Sí/No]
+   └── [Visitante]: Back-to-back: [Sí/No] | 3 en 4 noches: [Sí/No]
+
+4. NOTICIAS RELEVANTES (últimas 48h)
+   ├── [fecha] — [titular] — [fuente]
+   └── [fecha] — [titular] — [fuente]`;
 
 // ═══════════════════════════════════════════════════════════════
-// MAIN FUNCTION: NBA RESEARCH
+// SECCIÓN B: SONAR PRO - ESTADÍSTICAS AVANZADAS NBA
+// ═══════════════════════════════════════════════════════════════
+
+const NBA_SONAR_PROMPT_B = `Eres un investigador OSINT deportivo de nivel senior.
+Especialidad: estadísticas avanzadas NBA y lesiones confirmadas.
+
+Hoy es Marzo 2026. Temporada NBA 2025-2026.
+
+ESTADÍSTICAS AVANZADAS NBA (OBLIGATORIO):
+Busca para cada equipo:
+  - Offensive Rating (oRTG): puntos por 100 posesiones
+  - Defensive Rating (dRTG): puntos permitidos por 100 posesiones
+  - Net Rating: oRTG - dRTG
+  - Pace: posesiones por 48 minutos
+  - eFG%: effective field goal percentage
+
+Fuentes en orden:
+1. https://www.nba.com/stats/teams/advanced
+2. https://www.nbastuffer.com/2025-2026-nba-team-stats/
+3. https://www.espn.com/nba/hollinger/teamstats
+
+LESIONADOS (OBLIGATORIO):
+Busca injury report oficial:
+  Query: '[equipo] NBA injury report [fecha]'
+  Query: '[equipo] out questionable doubtful tonight'
+  Fuentes: ESPN, Rotowire, NBA.com
+
+TENDENCIAS DE MERCADO:
+  - Récord ATS (Against The Spread)
+  - % de partidos Over/Under
+
+REGLAS:
+- NO buscar corners en NBA.
+- NO usar campos xG/xGA.
+- NO escribir DATO NO ENCONTRADO sin buscar en mínimo 3 fuentes distintas.
+- Responde TODO EN ESPAÑOL.
+- Usa el formato de árbol ├── └──.
+
+FORMATO DE RESPUESTA OBLIGATORIO:
+
+📋 SECCIÓN B — ESTADÍSTICAS AVANZADAS Y TENDENCIAS NBA
+
+1. STATS AVANZADAS 2025-26:
+   ├── [Local] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
+   └── [Visitante] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
+
+2. PUNTOS PROMEDIO:
+   ├── [Local]: PPG temporada: X.X | PPG últimos 10: X.X
+   ├── [Local]: Puntos permitidos: X.X
+   ├── [Visitante]: PPG temporada: X.X | PPG últimos 10: X.X
+   └── [Visitante]: Puntos permitidos: X.X
+
+3. LESIONADOS CONFIRMADOS:
+   ├── [Local]: [jugador] - [estado] - [fuente]
+   └── [Visitante]: [jugador] - [estado] - [fuente]
+
+4. TENDENCIAS ATS:
+   ├── [Local] ATS: X-X | % Over: XX%
+   └── [Visitante] ATS: X-X | % Over: XX%
+
+5. PATRONES RECIENTES:
+   └── [Descripción de rachas o tendencias detectadas]`;
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN FUNCTION: NBA RESEARCH (PARALLEL CALLS)
 // ═══════════════════════════════════════════════════════════════
 
 export async function runNBAResearch(
@@ -185,32 +239,7 @@ export async function runNBAResearch(
   const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
   
   if (!OPENROUTER_API_KEY) {
-    return {
-      success: false,
-      report: '',
-      data: {
-        homeTeam: '',
-        awayTeam: '',
-        homeForm: null,
-        awayForm: null,
-        homeStats: null,
-        awayStats: null,
-        homeInjuries: null,
-        awayInjuries: null,
-        homeTrends: null,
-        awayTrends: null,
-        quantitativeSummary: {
-          expectedPace: '',
-          offensiveLevel: { home: '', away: '' },
-          defensiveLevel: { home: '', away: '' },
-          injuryImpact: '',
-          strongPatterns: []
-        }
-      },
-      sources: [],
-      timestamp: new Date().toISOString(),
-      error: 'OPENROUTER_API_KEY no configurada'
-    };
+    return createErrorResult('OPENROUTER_API_KEY no configurada');
   }
   
   try {
@@ -227,91 +256,154 @@ export async function runNBAResearch(
     
     onProgress?.(`🔍 Iniciando investigación NBA: ${homeTeam} vs ${awayTeam}`);
     
-    // Usar Perplexity Sonar Pro para búsqueda web en tiempo real
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "perplexity/sonar-pro",
-        search_type: "pro",
-        max_tokens: 4000,
-        temperature: 0.1,
-        messages: [
-          {
-            role: "system",
-            content: NBA_RESEARCH_PROMPT
-          },
-          {
-            role: "user",
-            content: `Partido: ${matchName}
+    // ═══════════════════════════════════════════════════════════════
+    // PARALLEL CALLS: Gemini 2.5 Pro + Sonar Pro
+    // ═══════════════════════════════════════════════════════════════
+    
+    const [researchA, researchB] = await Promise.all([
+      
+      // ── LLAMADA A: Gemini 2.5 Pro (forma, lesiones, contexto)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro-exp-03-25",
+          max_tokens: 2500,
+          temperature: 0.1,
+          messages: [
+            {
+              role: "system",
+              content: NBA_GEMINI_PROMPT_A
+            },
+            {
+              role: "user",
+              content: `Partido: ${matchName}
 Fecha: ${gameDate}
 Liga: NBA Regular Season
+Equipo Local: ${homeTeam}
+Equipo Visitante: ${awayTeam}
 
-Busca información en tiempo real sobre este partido y genera el informe completo.
-Recuerda usar fuentes oficiales y responder en ESPAÑOL.`
-          }
-        ]
-      })
-    });
+Busca información en tiempo real con Google Search.
+Responde SOLO en español con la estructura pedida.`
+            }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => r.choices?.[0]?.message?.content ?? "Sin datos de forma y lesiones")
+        .catch(() => "Sin datos de forma y lesiones (error Gemini)"),
+      
+      // ── LLAMADA B: Perplexity Sonar Pro (estadísticas avanzadas)
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "perplexity/sonar-pro",
+          search_type: "pro",
+          max_tokens: 2000,
+          temperature: 0.1,
+          messages: [
+            {
+              role: "system",
+              content: NBA_SONAR_PROMPT_B
+            },
+            {
+              role: "user",
+              content: `Partido: ${matchName}
+Fecha: ${gameDate}
+Equipo Local: ${homeTeam}
+Equipo Visitante: ${awayTeam}
+
+Busca estadísticas avanzadas y lesiones en tiempo real.
+NO busques corners ni xG (eso es fútbol).
+Responde SOLO en español con la estructura pedida.`
+            }
+          ]
+        })
+      }).then(r => r.json())
+        .then(r => r.choices?.[0]?.message?.content ?? "Sin datos estadísticos")
+        .catch(() => "Sin datos estadísticos (error Sonar Pro)")
+      
+    ]);
     
-    if (!response.ok) {
-      throw new Error(`Sonar Pro API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    const report = data.choices?.[0]?.message?.content ?? '';
-    
-    // Extraer fuentes citadas (Perplexity las incluye)
-    const sources: string[] = [];
-    if (data.citations) {
-      sources.push(...data.citations);
-    }
+    // Combinar las respuestas
+    const report = `
+═══════════════════════════════════════════════
+INFORME DE INVESTIGACIÓN NBA
+Partido: ${homeTeam} vs ${awayTeam}
+Fecha: ${gameDate}
+═══════════════════════════════════════════════
+
+═══════════════════════════════════════════════
+SECCIÓN A: FORMA, LESIONES Y CONTEXTO
+(Fuente: Gemini 2.5 Pro con Google Search)
+═══════════════════════════════════════════════
+
+${researchA}
+
+═══════════════════════════════════════════════
+SECCIÓN B: ESTADÍSTICAS AVANZADAS Y TENDENCIAS
+(Fuente: Perplexity Sonar Pro)
+═══════════════════════════════════════════════
+
+${researchB}
+`;
     
     onProgress?.(`✅ Investigación completada (${report.length} caracteres)`);
     
-    // Parsear el reporte en texto plano a datos estructurados
+    // Parsear datos estructurados
     const parsedData = parseNBAReport(report, homeTeam, awayTeam);
     
     return {
       success: true,
       report,
       data: parsedData,
-      sources,
+      sources: ['nba.com/stats', 'ESPN', 'NBAstuffer', 'Rotowire'],
       timestamp: new Date().toISOString()
     };
     
   } catch (error: any) {
     console.error('NBA Research error:', error);
-    return {
-      success: false,
-      report: '',
-      data: {
-        homeTeam: '',
-        awayTeam: '',
-        homeForm: null,
-        awayForm: null,
-        homeStats: null,
-        awayStats: null,
-        homeInjuries: null,
-        awayInjuries: null,
-        homeTrends: null,
-        awayTrends: null,
-        quantitativeSummary: {
-          expectedPace: '',
-          offensiveLevel: { home: '', away: '' },
-          defensiveLevel: { home: '', away: '' },
-          injuryImpact: '',
-          strongPatterns: []
-        }
-      },
-      sources: [],
-      timestamp: new Date().toISOString(),
-      error: error.message
-    };
+    return createErrorResult(error.message);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPER: CREATE ERROR RESULT
+// ═══════════════════════════════════════════════════════════════
+
+function createErrorResult(errorMsg: string): NBAResearchResult {
+  return {
+    success: false,
+    report: '',
+    data: {
+      homeTeam: '',
+      awayTeam: '',
+      homeForm: null,
+      awayForm: null,
+      homeStats: null,
+      awayStats: null,
+      homeInjuries: null,
+      awayInjuries: null,
+      homeTrends: null,
+      awayTrends: null,
+      quantitativeSummary: {
+        expectedPace: '',
+        offensiveLevel: { home: '', away: '' },
+        defensiveLevel: { home: '', away: '' },
+        injuryImpact: '',
+        strongPatterns: []
+      }
+    },
+    sources: [],
+    timestamp: new Date().toISOString(),
+    error: errorMsg
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -323,8 +415,7 @@ function parseNBAReport(
   homeTeam: string, 
   awayTeam: string
 ): NBAResearchResult['data'] {
-  // Estructura base
-  const result: NBAResearchResult['data'] = {
+  return {
     homeTeam,
     awayTeam,
     homeForm: null,
@@ -343,12 +434,6 @@ function parseNBAReport(
       strongPatterns: []
     }
   };
-  
-  // El reporte en texto ya contiene toda la información
-  // que el modelo de análisis cuantitativo usará directamente.
-  // El parsing estructurado es opcional para uso futuro.
-  
-  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -367,37 +452,13 @@ Error: ${nbaResult.error || 'Error desconocido'}
 Se recomienda usar datos estimados.`;
   }
   
-  return `
-═══════════════════════════════════════════════
-INFORME DE INVESTIGACIÓN NBA
-Partido: ${nbaResult.data.homeTeam} vs ${nbaResult.data.awayTeam}
-Fecha: ${new Date(nbaResult.timestamp).toLocaleDateString('es-ES')}
-═══════════════════════════════════════════════
-
-${nbaResult.report}
-
-═══════════════════════════════════════════════
-FUENTES CONSULTADAS
-═══════════════════════════════════════════════
-${nbaResult.sources.length > 0 
-  ? nbaResult.sources.map((s, i) => `${i + 1}. ${s}`).join('\n')
-  : 'Fuentes: nba.com, ESPN, NBAstuffer, Rotowire'
-}
-`;
+  return nbaResult.report;
 }
 
 // ═══════════════════════════════════════════════════════════════
 // EXPORT FOR PIPELINE INTEGRATION
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * Función de conveniencia para integrar NBA research
- * en el pipeline principal de análisis.
- * 
- * USO:
- * const nbaData = await fetchNBAResearch("Lakers vs Celtics");
- * // nbaData es texto plano para pasar a Claude/Grok
- */
 export async function fetchNBAResearch(
   matchName: string,
   date?: string
