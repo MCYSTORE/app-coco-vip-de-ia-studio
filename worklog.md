@@ -1,6 +1,39 @@
 # Coco VIP - Work Log
 
 ---
+Task ID: 7
+Agent: Main Agent
+Task: Corregir pipeline NBA con prompts específicos y reglas de probabilidad
+
+Work Log:
+- Modificado `/lib/nbaAnalysis.ts`:
+  - Sección A: Nuevo prompt específico para Gemini 2.5 Pro con Google Search
+    - Búsqueda obligatoria de lesionados: "[equipo] injury report today NBA 2026"
+    - Forma reciente con estructura detallada (últimos 5 partidos)
+    - Detección de back-to-back y fatiga de calendario
+    - REGLA: No devuelve "Sin datos" sin intentar 3 queries distintas
+  - Sección B: Nuevo prompt para Sonar Pro
+    - Stats avanzadas NBA: oRTG, dRTG, NetRTG, Pace, eFG%
+    - NO busca corners ni xG (eso es fútbol)
+    - Lesionados confirmados con fuentes: ESPN, Rotowire, NBA.com
+    - Tendencias ATS y Over/Under
+  - Llamadas paralelas: Promise.all([Gemini, Sonar Pro])
+- Modificado `/lib/nbaQuantModel.ts`:
+  - REGLA CRÍTICA: Edge máximo 20%
+  - Fórmula de probabilidad: prob_home = 0.50 + (NetRTG_diff × 0.02) + 0.03
+  - Ajustes: Lesiones estrella (-5%), Back-to-back (-3%), H2H (±2%)
+  - confidence_score SIEMPRE entre 0.0 y 1.0
+  - Edge > 20% → se ajusta a 20% con nota
+- Push a GitHub: commit 837cfd6
+
+Stage Summary:
+- Pipeline NBA corregido con prompts específicos
+- NO se modificó el pipeline de fútbol
+- Modelo cuantitativo con límites de edge
+- Fuentes específicas para cada tipo de dato
+- TypeScript compila sin errores
+
+---
 Task ID: 6
 Agent: Main Agent
 Task: Create NBA Quantitative Model for betting projections
