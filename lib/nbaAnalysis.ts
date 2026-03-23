@@ -127,7 +127,15 @@ STATS [Local]: oRTG: X | dRTG: X | NetRTG: X | Pace: X
 STATS [Visitante]: oRTG: X | dRTG: X | NetRTG: X | Pace: X
 
 NUNCA escribir 'Sin datos de contexto'.
-NUNCA mencionar jugadores sin verificar con búsqueda.`;
+NUNCA mencionar jugadores sin verificar con búsqueda.
+
+Si no encuentras datos con la primera búsqueda,
+intenta estas queries alternativas:
+- '[home team] NBA stats 2026'
+- '[away team] NBA stats 2026'
+- '[home team] vs [away team] NBA preview'
+NUNCA devolver 'Sin datos de contexto'
+sin haber intentado mínimo 3 queries distintas.`;
 
 // ═══════════════════════════════════════════════════════════════
 // SECCIÓN B: SONAR PRO - ESTADÍSTICAS AVANZADAS NBA

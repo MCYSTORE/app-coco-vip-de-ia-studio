@@ -189,6 +189,197 @@ function XGSection({ xgStats }: { xgStats: XGMatchStats }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// NBA Stats Section Component - SOLO PARA BASKETBALL
+// ═══════════════════════════════════════════════════════════════════
+
+interface NBAStatsData {
+  homeTeam?: string;
+  awayTeam?: string;
+  homeStats?: {
+    offensiveRating?: number;
+    defensiveRating?: number;
+    netRating?: number;
+    pace?: number;
+    pointsAvg?: number;
+    atsRecord?: string;
+    overUnderRecord?: string;
+  };
+  awayStats?: {
+    offensiveRating?: number;
+    defensiveRating?: number;
+    netRating?: number;
+    pace?: number;
+    pointsAvg?: number;
+    atsRecord?: string;
+    overUnderRecord?: string;
+  };
+}
+
+function NBAStatsSection({ nbaStats }: { nbaStats: NBAStatsData | null | undefined }) {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  if (!nbaStats || !nbaStats.homeTeam || !nbaStats.awayTeam) return null;
+
+  const home = nbaStats.homeStats || {};
+  const away = nbaStats.awayStats || {};
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between text-xs font-bold" style={{ color: 'var(--color-text-primary)' }}
+      >
+        <span className="flex items-center gap-2">
+          <BarChart3 className="w-4 h-4" style={{ color: 'var(--color-accent-primary)' }} />
+          🏀 Estadísticas NBA Avanzadas
+        </span>
+        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="rounded-xl p-4 space-y-4" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+              
+              {/* Teams Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Home Team */}
+                <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: 'var(--color-bg-card)' }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-success)' }} />
+                    <span className="text-xs font-bold truncate" style={{ color: 'var(--color-text-primary)' }}>{nbaStats.homeTeam}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-accent-primary)' }}>LOCAL</span>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    {home.offensiveRating && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>oRTG</span>
+                        <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{home.offensiveRating.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {home.defensiveRating && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>dRTG</span>
+                        <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{home.defensiveRating.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {home.netRating !== undefined && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>NetRTG</span>
+                        <span className="font-bold" style={{ color: home.netRating >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                          {home.netRating >= 0 ? '+' : ''}{home.netRating.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                    {home.pace && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>Pace</span>
+                        <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{home.pace.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {home.pointsAvg && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>PPG</span>
+                        <span className="font-bold" style={{ color: 'var(--color-success)' }}>{home.pointsAvg.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {home.atsRecord && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>ATS</span>
+                        <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>{home.atsRecord}</span>
+                      </div>
+                    )}
+                    {home.overUnderRecord && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>O/U</span>
+                        <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>{home.overUnderRecord}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Away Team */}
+                <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: 'var(--color-bg-card)' }}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'var(--color-danger)' }} />
+                    <span className="text-xs font-bold truncate" style={{ color: 'var(--color-text-primary)' }}>{nbaStats.awayTeam}</span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-danger-bg)', color: 'var(--color-danger)' }}>VISIT.</span>
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    {away.offensiveRating && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>oRTG</span>
+                        <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{away.offensiveRating.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {away.defensiveRating && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>dRTG</span>
+                        <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{away.defensiveRating.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {away.netRating !== undefined && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>NetRTG</span>
+                        <span className="font-bold" style={{ color: away.netRating >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                          {away.netRating >= 0 ? '+' : ''}{away.netRating.toFixed(1)}
+                        </span>
+                      </div>
+                    )}
+                    {away.pace && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>Pace</span>
+                        <span className="font-bold" style={{ color: 'var(--color-text-primary)' }}>{away.pace.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {away.pointsAvg && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>PPG</span>
+                        <span className="font-bold" style={{ color: 'var(--color-danger)' }}>{away.pointsAvg.toFixed(1)}</span>
+                      </div>
+                    )}
+                    {away.atsRecord && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>ATS</span>
+                        <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>{away.atsRecord}</span>
+                      </div>
+                    )}
+                    {away.overUnderRecord && (
+                      <div className="flex justify-between text-[11px]">
+                        <span style={{ color: 'var(--color-text-secondary)' }}>O/U</span>
+                        <span className="font-medium" style={{ color: 'var(--color-text-secondary)' }}>{away.overUnderRecord}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* NBA Analysis Info */}
+              <div className="rounded-lg p-3 flex items-start gap-2" style={{ backgroundColor: 'var(--color-bg-secondary)' }}>
+                <Activity className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-accent-primary)' }} />
+                <div className="text-[10px] leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                  <strong style={{ color: 'var(--color-text-primary)' }}>oRTG/dRTG</strong> mide eficiencia ofensiva y defensiva por 100 posesiones.
+                  <strong style={{ color: 'var(--color-text-primary)' }}> Pace</strong> indica posesiones por 48 min.
+                  Útil para mercados <strong>Totals</strong> y <strong>Spreads</strong>.
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // Debate Section Component with Tabs
 function DebateSection({ debate }: { debate: DebateResult }) {
   const [activeTab, setActiveTab] = useState<'pro' | 'contra' | 'conclusion'>('pro');
@@ -1111,6 +1302,38 @@ export default function Analysis({ initialMatchName }: AnalysisProps) {
               {result.sport === 'football' && result.xgStats && (
                 <div className="mt-4">
                   <XGSection xgStats={result.xgStats} />
+                </div>
+              )}
+
+              {/* NBA Stats Section - Basketball Only */}
+              {result.sport === 'basketball' && result.mercados_completos && (
+                <div className="mt-4">
+                  <NBAStatsSection nbaStats={{
+                    homeTeam: result.matchName?.split(' vs ')[0],
+                    awayTeam: result.matchName?.split(' vs ')[1],
+                    homeStats: {
+                      offensiveRating: (result.mercados_completos as any).teams_stats?.home?.off_rating_season,
+                      defensiveRating: (result.mercados_completos as any).teams_stats?.home?.def_rating_season,
+                      netRating: (result.mercados_completos as any).teams_stats?.home?.net_rating_season,
+                      pace: (result.mercados_completos as any).teams_stats?.home?.pace_season,
+                      pointsAvg: (result.mercados_completos as any).teams_stats?.home?.points_avg_season,
+                      atsRecord: (result.mercados_completos as any).teams_stats?.home?.ats_record ? 
+                        `${(result.mercados_completos as any).teams_stats?.home?.ats_record?.wins}-${(result.mercados_completos as any).teams_stats?.home?.ats_record?.losses}` : undefined,
+                      overUnderRecord: (result.mercados_completos as any).teams_stats?.home?.over_under_record ?
+                        `${(result.mercados_completos as any).teams_stats?.home?.over_under_record?.over}-${(result.mercados_completos as any).teams_stats?.home?.over_under_record?.under}` : undefined,
+                    },
+                    awayStats: {
+                      offensiveRating: (result.mercados_completos as any).teams_stats?.away?.off_rating_season,
+                      defensiveRating: (result.mercados_completos as any).teams_stats?.away?.def_rating_season,
+                      netRating: (result.mercados_completos as any).teams_stats?.away?.net_rating_season,
+                      pace: (result.mercados_completos as any).teams_stats?.away?.pace_season,
+                      pointsAvg: (result.mercados_completos as any).teams_stats?.away?.points_avg_season,
+                      atsRecord: (result.mercados_completos as any).teams_stats?.away?.ats_record ? 
+                        `${(result.mercados_completos as any).teams_stats?.away?.ats_record?.wins}-${(result.mercados_completos as any).teams_stats?.away?.ats_record?.losses}` : undefined,
+                      overUnderRecord: (result.mercados_completos as any).teams_stats?.away?.over_under_record ?
+                        `${(result.mercados_completos as any).teams_stats?.away?.over_under_record?.over}-${(result.mercados_completos as any).teams_stats?.away?.over_under_record?.under}` : undefined,
+                    }
+                  }} />
                 </div>
               )}
 
