@@ -1,6 +1,69 @@
 # Coco VIP - Work Log
 
 ---
+Task ID: 6
+Agent: Main Agent
+Task: Create NBA Quantitative Model for betting projections
+
+Work Log:
+- Created `/lib/nbaQuantModel.ts` - NBA Quantitative Model module
+  - Complete TypeScript interfaces for NBA schema:
+    - NBAQuantResult, NBATeamStatsQuant, NBAGameTotalMarket, NBASpreadMarket
+    - NBAPlayerProp, NBABestPick, NBATotalsMarkets
+  - `runNBAQuantModel()` - Main function that processes research + odds → structured JSON
+  - `convertNBAQuantToAnalysisResult()` - Converts NBA schema to app's AnalysisResult format
+  - `formatNBAQuantResult()` - Human-readable output for debugging
+  - Team abbreviation helper for game_id generation
+  - Default fallback result for error handling
+- Updated `/lib/analyzeMatch.ts`:
+  - Added import for nbaQuantModel functions
+  - Modified `analyzeNBA()` to use NBA-specific quant model instead of football's runQuantAnalysis
+  - Pipeline now: Odds → NBA Research → NBA Quant Model → Grok validation
+- Verified TypeScript compilation (no errors)
+
+Stage Summary:
+- NBA Quant Model produces structured JSON with:
+  - teams_stats (pace, ORtg, DRtg, NetRtg, PPG, ATS record, injuries, back-to-back)
+  - totals_markets (game_total, team_totals with projections, probabilities, edges, Kelly)
+  - spread_market (fair spread, cover probabilities, edge calculations)
+  - player_props (2-4 relevant players with projections)
+  - best_pick (optimal market selection with confidence 0.0-1.0)
+- All calculations follow formulas specified:
+  - model_projection = pace × (ORtg_home/100 + ORtg_away/100)
+  - model_fair_spread = NetRtg_home - NetRtg_away + 3
+  - Kelly = (prob × odds - 1) / (odds - 1)
+- confidence_score ALWAYS between 0.0 and 1.0 (validated and normalized)
+- Respects restriction: NO modification to existing football pipeline steps
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Create independent NBA research module for sports betting analysis
+
+Work Log:
+- Created `/lib/nbaAnalysis.ts` - New independent NBA research module
+  - Interfaces: NBAAnalysisOptions, NBATeamForm, NBATeamStats, NBAInjuryReport, NBAMarketTrends, NBAResearchResult
+  - Uses Perplexity Sonar Pro for real-time web search
+  - Generates text report for downstream model consumption
+  - Follows exact 5-section format requested:
+    1. Recent form (last 5 games per team)
+    2. Advanced team statistics (ORtg, DRtg, NetRtg, Pace, eFG%, etc.)
+    3. Injuries and rest (back-to-back, 3-in-4, 4-in-6 nights)
+    4. Market trends (Over/Under %, ATS record)
+    5. Quantitative summary for model
+- Added `analyzeNBA()` function to `/lib/analyzeMatch.ts`
+  - Independent pipeline from football (does NOT modify existing steps)
+  - Pipeline: Odds API → NBA Research (Sonar Pro) → Claude Sonnet → Grok validation
+- Verified TypeScript compilation (no errors in new files)
+
+Stage Summary:
+- New NBA module at `/lib/nbaAnalysis.ts` with `runNBAResearch()` and `fetchNBAResearch()` functions
+- New `analyzeNBA()` export in `/lib/analyzeMatch.ts`
+- Uses same infrastructure (Odds API, OpenRouter, Claude, Grok) but with NBA-specific prompts
+- All prompts in Spanish as requested
+- Respects restriction: NO modification to existing Step 1, 2A, 2B, 3, 4 for football
+
+---
 Task ID: 1
 Agent: Main Agent
 Task: Configure API keys and push AI-driven 3-step analysis pipeline to GitHub
