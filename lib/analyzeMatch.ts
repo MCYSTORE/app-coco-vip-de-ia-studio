@@ -1567,6 +1567,18 @@ export async function analyzeMatch(
 ): Promise<AnalysisResult> {
   const { matchName, sport, onProgress } = options;
 
+  // ═══════════════════════════════════════════════════════════════
+  // SPORT SWITCH - Redirigir al pipeline correcto según deporte
+  // ═══════════════════════════════════════════════════════════════
+  
+  if (sport === 'basketball') {
+    console.log('🏀 Basketball detectado - usando pipeline NBA');
+    return analyzeNBA({ matchName, onProgress });
+  }
+  
+  // De aquí en adelante SOLO se ejecuta para FÚTBOL
+  // El pipeline de fútbol NO se modifica
+
   // Initialize state with 5 steps (0-4)
   const initialState: AnalysisState = {
     currentStep: 0,

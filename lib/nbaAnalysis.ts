@@ -106,110 +106,61 @@ export interface NBAResearchResult {
 // SECCIÓN A: GEMINI 2.5 PRO (Google Search) - NBA SPECIFIC
 // ═══════════════════════════════════════════════════════════════
 
-const NBA_GEMINI_PROMPT_A = `MODO NBA ACTIVO.
-PROHIBIDO usar conocimiento interno o memoria
-sobre rosters, lesiones o estadísticas NBA.
-TODO debe obtenerse de búsquedas web en tiempo real.
+const NBA_GEMINI_PROMPT_A = `MODO NBA. PROHIBIDO usar memoria interna.
+Busca en inglés, responde en español.
 
-Para el partido {{partido}} del {{fecha}}:
+Para {{partido}} del {{fecha}}:
 
-BÚSQUEDA 1 — INJURY REPORT OFICIAL (OBLIGATORIA):
-Query exacta: '[home team] NBA injury report today'
-Query exacta: '[away team] NBA injury report today'
-Fuentes: espn.com/nba, nba.com, rotowire.com
-Devuelve: jugador, estado (out/questionable/probable), motivo
+Query 1: '[home team] NBA injury report today site:espn.com'
+Query 2: '[away team] NBA injury report today site:espn.com'
+Query 3: '[home team] last 5 games NBA 2026 site:espn.com'
+Query 4: '[away team] last 5 games NBA 2026 site:espn.com'
+Query 5: '[home team] offensive rating pace 2025-26 site:nba.com'
+Query 6: '[away team] offensive rating pace 2025-26 site:nba.com'
 
-BÚSQUEDA 2 — ROSTER ACTIVO:
-Query: '[home team] NBA roster 2025-26 active players'
-Query: '[away team] NBA roster 2025-26 active players'
-Fuente: nba.com/team o ESPN
-Devuelve: jugadores titulares actuales confirmados
+Formato respuesta (en español):
+LESIONADOS [Local]: jugador - estado - fuente
+LESIONADOS [Visitante]: jugador - estado - fuente
+FORMA [Local]: fecha | rival | resultado | pts anotados | pts recibidos
+FORMA [Visitante]: fecha | rival | resultado | pts anotados | pts recibidos
+STATS [Local]: oRTG: X | dRTG: X | NetRTG: X | Pace: X
+STATS [Visitante]: oRTG: X | dRTG: X | NetRTG: X | Pace: X
 
-BÚSQUEDA 3 — FORMA RECIENTE:
-Query: '[home team] last 5 games NBA results 2026'
-Query: '[away team] last 5 games NBA results 2026'
-Fuentes: ESPN, Yahoo Sports, nba.com
-Devuelve tabla: fecha, rival, resultado, puntos anotados/recibidos
-
-BÚSQUEDA 4 — ESTADÍSTICAS AVANZADAS:
-Query: '[home team] offensive rating defensive rating pace NBA 2025-26'
-Query: '[away team] offensive rating defensive rating pace NBA 2025-26'
-Fuentes: nba.com/stats/teams/advanced, nbastuffer.com
-Devuelve: oRTG, dRTG, NetRTG, Pace
-
-BÚSQUEDA 5 — BACK TO BACK:
-Query: '[home team] NBA schedule [fecha] back to back'
-Query: '[away team] NBA schedule [fecha] back to back'
-Devuelve: si el partido es 2do en 2 noches o 3ro en 4
-
-REGLAS ABSOLUTAS:
-- Si una búsqueda falla, intenta 2 queries alternativas.
-- NUNCA escribir 'Sin datos de contexto'.
-- NUNCA mencionar jugadores sin confirmar con búsqueda.
-- Realiza TODAS las búsquedas en INGLÉS.
-- Traduce TODO al español antes de responder.
-- Mantén en inglés SOLO nombres de jugadores,
-  equipos y términos técnicos: oRTG, dRTG, NetRTG,
-  Pace, eFG%, ATS, PRA, back-to-back.
-- Todo lo demás en español neutro.`;
+NUNCA escribir 'Sin datos de contexto'.
+NUNCA mencionar jugadores sin verificar con búsqueda.`;
 
 // ═══════════════════════════════════════════════════════════════
 // SECCIÓN B: SONAR PRO - ESTADÍSTICAS AVANZADAS NBA
 // ═══════════════════════════════════════════════════════════════
 
-const NBA_SONAR_PROMPT_B = `MODO NBA ACTIVO.
-PROHIBIDO usar memoria interna sobre rosters
-o estadísticas. TODO desde búsquedas reales.
+const NBA_SONAR_PROMPT_B = `MODO NBA. Busca en inglés, responde en español.
+PROHIBIDO: xG, xGA, BTTS, corners, goles.
+SOLO estadísticas de baloncesto.
 
-BÚSQUEDAS EN INGLÉS — RESPUESTA EN ESPAÑOL.
+Para {{partido}}:
 
-BÚSQUEDA 1 — ESTADÍSTICAS AVANZADAS:
-Query: '[home team] offensive rating defensive rating pace 2025-26'
-Query: '[away team] offensive rating defensive rating pace 2025-26'
-Fuentes en orden:
-1. nba.com/stats/teams/advanced
-2. nbastuffer.com/2025-2026-nba-team-stats
-3. espn.com/nba/hollinger/teamstats
+Query 1: '[home team] NBA injury report [fecha]'
+Query 2: '[away team] NBA injury report [fecha]'
+Query 3: '[home team] offensive defensive rating NBA 2025-26'
+Query 4: '[away team] offensive defensive rating NBA 2025-26'
+Query 5: '[home team] NBA over under record 2025-26'
+Query 6: '[away team] NBA ATS record 2025-26'
 
-BÚSQUEDA 2 — LESIONADOS OFICIALES:
-Query: '[home team] NBA injury report [fecha]'
-Query: '[away team] NBA injury report [fecha]'
-Query: '[home team] out questionable tonight NBA'
-Query: '[away team] out questionable tonight NBA'
-Fuentes en orden:
-1. rotowire.com/basketball/nba-lineups
-2. espn.com/nba (injury report)
-3. nba.com (official status)
+Fuentes: rotowire.com, nba.com/stats, nbastuffer.com,
+espn.com/nba, teamrankings.com
 
-BÚSQUEDA 3 — TENDENCIAS DE MERCADO:
-Query: '[home team] NBA over under record 2025-26'
-Query: '[away team] NBA ATS record 2025-26'
-Fuentes: covers.com, teamrankings.com
-
-FORMATO OBLIGATORIO DE RESPUESTA:
+Formato respuesta (en español):
 STATS AVANZADAS:
-├── [Local] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
-└── [Visitante] oRTG: X.X | dRTG: X.X | NetRTG: X.X | Pace: X.X
+[Local] oRTG: X | dRTG: X | NetRTG: X | Pace: X
+[Visitante] oRTG: X | dRTG: X | NetRTG: X | Pace: X
 
 LESIONADOS:
-├── [Local]: jugador - estado - fuente
-└── [Visitante]: jugador - estado - fuente
+[Local]: jugador - estado - fuente
+[Visitante]: jugador - estado - fuente
 
 TENDENCIAS:
-├── [Local] Over/Under record: XX-XX
-└── [Visitante] Over/Under record: XX-XX
-
-REGLAS ABSOLUTAS:
-- PROHIBIDO campos xG, xGA, BTTS, corners en NBA.
-- PROHIBIDO usar datos de memoria sin búsqueda.
-- PROHIBIDO mencionar jugadores sin verificar roster.
-- Si un dato falla en fuente 1, ir a fuente 2 y 3.
-- Solo escribir DATO NO ENCONTRADO si fallaron
-  todas las fuentes disponibles.
-- Búsquedas en INGLÉS, respuesta en ESPAÑOL.
-- Mantén en inglés solo: nombres de jugadores,
-  equipos y términos técnicos (oRTG, dRTG, Pace,
-  eFG%, ATS, PRA, back-to-back).`;
+[Local] Over/Under record: XX-XX
+[Visitante] ATS record: XX-XX`;
 
 // ═══════════════════════════════════════════════════════════════
 // MAIN FUNCTION: NBA RESEARCH (PARALLEL CALLS)
