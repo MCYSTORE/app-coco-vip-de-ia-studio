@@ -134,6 +134,8 @@ intenta estas queries alternativas:
 - '[home team] NBA stats 2026'
 - '[away team] NBA stats 2026'
 - '[home team] vs [away team] NBA preview'
+- '[home team] basketball reference stats 2026'
+- '[away team] basketball reference stats 2026'
 NUNCA devolver 'Sin datos de contexto'
 sin haber intentado mínimo 3 queries distintas.`;
 
@@ -205,25 +207,27 @@ export async function runNBAResearch(
     
     const [researchA, researchB] = await Promise.all([
       
-      // ── LLAMADA A: Gemini 2.5 Pro (forma, lesiones, contexto)
-      fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro-exp-03-25",
-          max_tokens: 2500,
-          temperature: 0.1,
-          messages: [
-            {
-              role: "system",
-              content: NBA_GEMINI_PROMPT_A
+      // ── LLAMADA A: Gemini 2.5 Pro (forma, lesiones, contexto) CON FALLBACK
+      (async () => {
+        try {
+          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+              "Content-Type": "application/json"
             },
-            {
-              role: "user",
-              content: `Partido: ${matchName}
+            body: JSON.stringify({
+              model: "google/gemini-2.5-pro-exp-03-25",
+              max_tokens: 2500,
+              temperature: 0.1,
+              messages: [
+                {
+                  role: "system",
+                  content: NBA_GEMINI_PROMPT_A
+                },
+                {
+                  role: "user",
+                  content: `Partido: ${matchName}
 Fecha: ${gameDate}
 Liga: NBA Regular Season
 Equipo Local: ${homeTeam}
@@ -231,12 +235,54 @@ Equipo Visitante: ${awayTeam}
 
 Busca información en tiempo real con Google Search.
 Responde SOLO en español con la estructura pedida.`
-            }
-          ]
-        })
-      }).then(r => r.json())
-        .then(r => r.choices?.[0]?.message?.content ?? "Sin datos de forma y lesiones")
-        .catch(() => "Sin datos de forma y lesiones (error Gemini)"),
+                }
+              ]
+            })
+          });
+          
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          
+          // FIX 2: Si respuesta vacía o muy corta, reintento con query alternativa
+          if (!content || content.length < 50 || content.includes('Sin datos')) {
+            console.log('⚠️ Gemini respuesta vacía, reintentando con query alternativa...');
+            
+            const retryResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                model: "google/gemini-2.5-pro-exp-03-25",
+                max_tokens: 2500,
+                temperature: 0.1,
+                messages: [
+                  {
+                    role: "system",
+                    content: `Busca estadísticas NBA en basketball-reference.com, nba.com/stats, espn.com.
+Responde en español con cualquier dato que encuentres.`
+                  },
+                  {
+                    role: "user",
+                    content: `${homeTeam} vs ${awayTeam} NBA ${gameDate} stats injuries`
+                  }
+                ]
+              })
+            });
+            
+            const retryData = await retryResponse.json();
+            const retryContent = retryData.choices?.[0]?.message?.content;
+            
+            return retryContent || content || 'No se encontraron datos tras 2 intentos';
+          }
+          
+          return content;
+        } catch (error) {
+          console.error('Error en Gemini:', error);
+          return 'Error en búsqueda de contexto NBA';
+        }
+      })(),
       
       // ── LLAMADA B: Perplexity Sonar Pro (estadísticas avanzadas)
       fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -351,6 +397,7 @@ function createErrorResult(errorMsg: string): NBAResearchResult {
 
 // ═══════════════════════════════════════════════════════════════
 // HELPER: PARSE NBA REPORT TO STRUCTURED DATA
+// FIX 1: Ahora parsea realmente los datos del reporte de texto
 // ═══════════════════════════════════════════════════════════════
 
 function parseNBAReport(
@@ -358,24 +405,113 @@ function parseNBAReport(
   homeTeam: string, 
   awayTeam: string
 ): NBAResearchResult['data'] {
+  
+  // Helper para extraer números de texto
+  const extractNumber = (text: string, pattern: RegExp): number | null => {
+    const match = text.match(pattern);
+    return match ? parseFloat(match[1]) : null;
+  };
+  
+  // Helper para extraer records ATS y O/U
+  const extractRecord = (text: string, pattern: RegExp): { wins: number; losses: number } | null => {
+    const match = text.match(pattern);
+    if (match) {
+      return { wins: parseInt(match[1]), losses: parseInt(match[2]) };
+    }
+    return null;
+  };
+  
+  // Parsear STATS del reporte - buscar patrones como "oRTG: 115.2"
+  const homeStats: NBATeamStats = {
+    team: homeTeam,
+    offensiveRating: extractNumber(report, /(?:oRTG|offensive rating|ORTG)[\s:]+(\d+\.?\d*)/i) ||
+                      extractNumber(report, new RegExp(`${homeTeam}[^\n]*oRTG[\s:]+(\d+\.?\d*)`, 'i')),
+    offensiveRatingLast10: null,
+    defensiveRating: extractNumber(report, /(?:dRTG|defensive rating|DRTG)[\s:]+(\d+\.?\d*)/i) ||
+                      extractNumber(report, new RegExp(`${homeTeam}[^\n]*dRTG[\s:]+(\d+\.?\d*)`, 'i')),
+    netRating: extractNumber(report, /(?:NetRTG|net rating)[\s:]+(-?\d+\.?\d*)/i) ||
+               extractNumber(report, new RegExp(`${homeTeam}[^\n]*NetRTG[\s:]+(-?\d+\.?\d*)`, 'i')),
+    pace: extractNumber(report, /(?:Pace)[\s:]+(\d+\.?\d*)/i) ||
+          extractNumber(report, new RegExp(`${homeTeam}[^\n]*Pace[\s:]+(\d+\.?\d*)`, 'i')),
+    avgPointsScored: extractNumber(report, /(?:PPG|pts.*anotados|points.*scored)[\s:]*(\d+\.?\d*)/i),
+    avgPointsAllowed: extractNumber(report, /(?:pts.*recibidos|points.*allowed)[\s:]*(\d+\.?\d*)/i),
+    avgPointsScoredLast10: null,
+    avgPointsAllowedLast10: null,
+    eFGPercent: null
+  };
+  
+  const awayStats: NBATeamStats = {
+    team: awayTeam,
+    offensiveRating: extractNumber(report, new RegExp(`${awayTeam}[^\n]*oRTG[\s:]+(\d+\.?\d*)`, 'i')) ||
+                      extractNumber(report, /(?:oRTG|offensive rating|ORTG)[\s:]+(\d+\.?\d*)/gi)?.[1] || null,
+    offensiveRatingLast10: null,
+    defensiveRating: extractNumber(report, new RegExp(`${awayTeam}[^\n]*dRTG[\s:]+(\d+\.?\d*)`, 'i')) ||
+                      null,
+    netRating: extractNumber(report, new RegExp(`${awayTeam}[^\n]*NetRTG[\s:]+(-?\d+\.?\d*)`, 'i')) ||
+               null,
+    pace: extractNumber(report, new RegExp(`${awayTeam}[^\n]*Pace[\s:]+(\d+\.?\d*)`, 'i')) ||
+          null,
+    avgPointsScored: null,
+    avgPointsAllowed: null,
+    avgPointsScoredLast10: null,
+    avgPointsAllowedLast10: null,
+    eFGPercent: null
+  };
+  
+  // Parsear records ATS y O/U
+  const homeATSMatch = report.match(new RegExp(`${homeTeam}[^\n]*ATS[^\n]*(\d+)-(\d+)`, 'i'));
+  const awayATSMatch = report.match(new RegExp(`${awayTeam}[^\n]*ATS[^\n]*(\d+)-(\d+)`, 'i'));
+  const homeOUMatch = report.match(new RegExp(`${homeTeam}[^\n]*(?:O\/U|Over\/Under)[^\n]*(\d+)-(\d+)`, 'i'));
+  const awayOUMatch = report.match(new RegExp(`${awayTeam}[^\n]*(?:O\/U|Over\/Under)[^\n]*(\d+)-(\d+)`, 'i'));
+  
+  const homeTrends: NBAMarketTrends = {
+    team: homeTeam,
+    overUnderPercentage: null,
+    atsRecord: homeATSMatch ? { wins: parseInt(homeATSMatch[1]), losses: parseInt(homeATSMatch[2]) } : null,
+    recentTotalsPattern: ''
+  };
+  
+  const awayTrends: NBAMarketTrends = {
+    team: awayTeam,
+    overUnderPercentage: null,
+    atsRecord: awayATSMatch ? { wins: parseInt(awayATSMatch[1]), losses: parseInt(awayATSMatch[2]) } : null,
+    recentTotalsPattern: ''
+  };
+  
+  // Calcular quantitative summary si hay datos
+  const quantitativeSummary = {
+    expectedPace: homeStats.pace && awayStats.pace 
+      ? ((homeStats.pace + awayStats.pace) / 2).toFixed(1)
+      : '',
+    offensiveLevel: {
+      home: homeStats.offensiveRating ? (homeStats.offensiveRating > 115 ? 'Alto' : homeStats.offensiveRating > 110 ? 'Medio' : 'Bajo') : '',
+      away: awayStats.offensiveRating ? (awayStats.offensiveRating > 115 ? 'Alto' : awayStats.offensiveRating > 110 ? 'Medio' : 'Bajo') : ''
+    },
+    defensiveLevel: {
+      home: homeStats.defensiveRating ? (homeStats.defensiveRating < 110 ? 'Fuerte' : homeStats.defensiveRating < 115 ? 'Medio' : 'Débil') : '',
+      away: awayStats.defensiveRating ? (awayStats.defensiveRating < 110 ? 'Fuerte' : awayStats.defensiveRating < 115 ? 'Medio' : 'Débil') : ''
+    },
+    injuryImpact: '',
+    strongPatterns: []
+  };
+  
+  console.log('📊 NBA Stats parseadas:', {
+    home: { oRTG: homeStats.offensiveRating, dRTG: homeStats.defensiveRating, Pace: homeStats.pace },
+    away: { oRTG: awayStats.offensiveRating, dRTG: awayStats.defensiveRating, Pace: awayStats.pace }
+  });
+  
   return {
     homeTeam,
     awayTeam,
     homeForm: null,
     awayForm: null,
-    homeStats: null,
-    awayStats: null,
+    homeStats,
+    awayStats,
     homeInjuries: null,
     awayInjuries: null,
-    homeTrends: null,
-    awayTrends: null,
-    quantitativeSummary: {
-      expectedPace: '',
-      offensiveLevel: { home: '', away: '' },
-      defensiveLevel: { home: '', away: '' },
-      injuryImpact: '',
-      strongPatterns: []
-    }
+    homeTrends,
+    awayTrends,
+    quantitativeSummary
   };
 }
 

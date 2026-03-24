@@ -1798,6 +1798,22 @@ export async function analyzeNBA(
     console.log(`⚠️ Step 1 (NBA Research) warning: ${nbaResearch.error}`);
   }
   
+  // FIX 1: Log de stats parseadas para debug
+  console.log('📊 NBA Research data:', {
+    homeTeam: nbaResearch.data?.homeTeam,
+    awayTeam: nbaResearch.data?.awayTeam,
+    homeStats: nbaResearch.data?.homeStats ? {
+      oRTG: nbaResearch.data.homeStats.offensiveRating,
+      dRTG: nbaResearch.data.homeStats.defensiveRating,
+      Pace: nbaResearch.data.homeStats.pace
+    } : null,
+    awayStats: nbaResearch.data?.awayStats ? {
+      oRTG: nbaResearch.data.awayStats.offensiveRating,
+      dRTG: nbaResearch.data.awayStats.defensiveRating,
+      Pace: nbaResearch.data.awayStats.pace
+    } : null
+  });
+  
   emitProgress(1, 'completed', nbaResearch.success ? undefined : nbaResearch.error);
 
   // ═══════════════════════════════════════════════════════════════
@@ -1818,6 +1834,39 @@ export async function analyzeNBA(
     oddsPayload,
     nbaResearch.report
   );
+  
+  // FIX 1: Añadir NBA stats al resultado para que el frontend pueda mostrarlas
+  // Estructura para NBAStatsSection component
+  (analysisResult as any).teams_stats = {
+    home: {
+      off_rating_season: nbaResearch.data?.homeStats?.offensiveRating || null,
+      def_rating_season: nbaResearch.data?.homeStats?.defensiveRating || null,
+      net_rating_season: nbaResearch.data?.homeStats?.netRating || null,
+      pace_season: nbaResearch.data?.homeStats?.pace || null,
+      points_avg_season: nbaResearch.data?.homeStats?.avgPointsScored || null,
+      ats_record: nbaResearch.data?.homeTrends?.atsRecord || null,
+      over_under_record: null // TODO: parsear del reporte
+    },
+    away: {
+      off_rating_season: nbaResearch.data?.awayStats?.offensiveRating || null,
+      def_rating_season: nbaResearch.data?.awayStats?.defensiveRating || null,
+      net_rating_season: nbaResearch.data?.awayStats?.netRating || null,
+      pace_season: nbaResearch.data?.awayStats?.pace || null,
+      points_avg_season: nbaResearch.data?.awayStats?.avgPointsScored || null,
+      ats_record: nbaResearch.data?.awayTrends?.atsRecord || null,
+      over_under_record: null
+    }
+  };
+  
+  // Añadir datos de NBA research para Supabase
+  (analysisResult as any).nbaStats = {
+    homeTeam: nbaResearch.data?.homeTeam,
+    awayTeam: nbaResearch.data?.awayTeam,
+    homeStats: nbaResearch.data?.homeStats,
+    awayStats: nbaResearch.data?.awayStats,
+    homeTrends: nbaResearch.data?.homeTrends,
+    awayTrends: nbaResearch.data?.awayTrends
+  };
   
   emitProgress(2, 'completed');
 

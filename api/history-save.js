@@ -35,11 +35,16 @@ export default async function handler(req, res) {
     console.log('📊 Match:', result.matchName || result.match || 'Unknown');
     console.log('📊 Sport:', result.sport || 'football');
 
+    // Detectar deporte para campos específicos
+    const sport = result.sport || 'football';
+    const isNBA = sport === 'basketball' || sport === 'NBA';
+    const isFootball = sport === 'football' || sport === 'Football';
+
     // Preparar datos para Supabase
     const analysisData = {
       matchName: result.matchName || result.match || '',
       match: result.match || result.matchName || '',
-      sport: result.sport || 'football',
+      sport: sport,
       league: result.league || 'Otro',
       
       // Selección y mercado
@@ -70,7 +75,30 @@ export default async function handler(req, res) {
       userContext: userContext,
       
       // Fuente
-      source: result.source || 'manual'
+      source: result.source || 'manual',
+
+      // FIX 3: NBA Stats específicas (si aplica)
+      ...(isNBA && {
+        homeStats: result.nbaStats?.homeStats || result.homeStats || null,
+        awayStats: result.nbaStats?.awayStats || result.awayStats || null,
+        homeTrends: result.homeTrends || null,
+        awayTrends: result.awayTrends || null,
+        home_ortg: result.nbaStats?.homeStats?.offensiveRating || null,
+        home_drtg: result.nbaStats?.homeStats?.defensiveRating || null,
+        home_pace: result.nbaStats?.homeStats?.pace || null,
+        away_ortg: result.nbaStats?.awayStats?.offensiveRating || null,
+        away_drtg: result.nbaStats?.awayStats?.defensiveRating || null,
+        away_pace: result.nbaStats?.awayStats?.pace || null,
+      }),
+
+      // FIX 3: Fútbol Stats específicas (NO TOCAR)
+      ...(isFootball && {
+        xgStats: result.xgStats || null,
+        xg_home: result.xgStats?.home?.avg_xg || null,
+        xga_home: result.xgStats?.home?.avg_xga || null,
+        xg_away: result.xgStats?.away?.avg_xg || null,
+        xga_away: result.xgStats?.away?.avg_xga || null,
+      }),
     };
 
     console.log('📊 Datos preparados:', JSON.stringify(analysisData).substring(0, 200));
