@@ -242,7 +242,11 @@ async function fetchOdds(matchName, sport, oddsApiKey) {
 // STEP 2: PARALLEL RESEARCH (Gemini 2.5 Pro + Sonar Pro + Sonar Pro Corners)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const GEMINI_SYSTEM_PROMPT = `🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROMPTS FÚTBOL (NO TOCAR)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const GEMINI_SYSTEM_PROMPT_FOOTBALL = `🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
 Traduce cualquier fuente en otro idioma al español.
 Nunca mezcles idiomas en la respuesta.
 
@@ -273,7 +277,7 @@ Formato de respuesta usando árbol ├── └──:
 5. NOTICIAS RELEVANTES (últimas 48h)
    └── [fecha] — [titular en español] — [fuente]`;
 
-const SONAR_SYSTEM_PROMPT = `Eres un investigador deportivo experto. DEBES hacer búsquedas profundas y multi-step para cada dato.
+const SONAR_SYSTEM_PROMPT_FOOTBALL = `Eres un investigador deportivo experto. DEBES hacer búsquedas profundas y multi-step para cada dato.
 NO respondas con 'DATO NO ENCONTRADO' sin haber buscado en mínimo 5 URLs distintas.
 Responde TODO en español.
 
@@ -307,14 +311,129 @@ Formato de respuesta usando árbol ├── └──:
    ├── % partidos con BTTS local: [número]%
    └── % partidos Over 2.5 local: [número]%`;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROMPTS NBA (NUEVO)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const GEMINI_SYSTEM_PROMPT_NBA = `MODO NBA. PROHIBIDO usar memoria interna.
+Busca en inglés, responde en español.
+
+🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+Traduce cualquier fuente en otro idioma al español.
+
+Eres un investigador deportivo NBA con acceso web en tiempo real.
+Hoy es Marzo 2026. Solo datos de temporada NBA 2025/2026.
+NUNCA inventes datos. Si no encuentras algo escribe: 'DATO NO ENCONTRADO'.
+
+QUERIES A EJECUTAR (en este orden):
+1. '[home team] NBA injury report today site:espn.com'
+2. '[away team] NBA injury report today site:espn.com'
+3. '[home team] last 5 games NBA results 2026'
+4. '[away team] last 5 games NBA results 2026'
+5. '[home team] offensive rating pace 2025-26 nba.com'
+6. '[away team] offensive rating pace 2025-26 nba.com'
+
+Fuentes prioritarias: espn.com/nba, nba.com/stats, basketball-reference.com, rotowire.com
+
+Formato de respuesta usando árbol ├── └──:
+
+📋 SECCIÓN A — FORMA Y CONTEXTO NBA
+
+1. FORMA RECIENTE (últimos 5 partidos de CADA equipo)
+   ├── Local: [fecha] vs [rival] [marcador] | [nota breve]
+   └── Visitante: [fecha] vs [rival] [marcador] | [nota breve]
+
+2. CLASIFICACIÓN ACTUAL
+   ├── Local: [posición]º en [Conferencia Este/Oeste] | [récord W-L]
+   └── Visitante: [posición]º en [Conferencia Este/Oeste] | [récord W-L]
+
+3. HEAD TO HEAD (últimos 3 enfrentamientos)
+   └── [fecha] [local] [marcador] [visitante]
+
+4. LESIONADOS Y DOUDTFUL
+   ├── Local: [jugador] - [estado] - [fuente]
+   └── Visitante: [jugador] - [estado] - [fuente]
+
+5. CONTEXTO ESPECIALES
+   └── [Back-to-back / 3 en 4 noches / descanso / motivación]
+
+NUNCA devolver 'Sin datos de contexto'.
+NUNCA mencionar xG, corners, BTTS (eso es fútbol).`;
+
+const SONAR_SYSTEM_PROMPT_NBA = `MODO NBA. Busca en inglés, responde en español.
+PROHIBIDO: xG, xGA, BTTS, corners, goles. SOLO estadísticas de baloncesto.
+
+🚨 IDIOMA: Responde EXCLUSIVAMENTE en español neutro.
+
+Eres un investigador OSINT deportivo especializado en NBA.
+Hoy es Marzo 2026. Solo datos de temporada NBA 2025/2026.
+
+QUERIES A EJECUTAR (en este orden):
+1. '[home team] NBA injury report [fecha]'
+2. '[away team] NBA injury report [fecha]'
+3. '[home team] offensive defensive rating 2025-26 nba.com/stats'
+4. '[away team] offensive defensive rating 2025-26 nba.com/stats'
+5. '[home team] over under record 2025-26 NBA'
+6. '[away team] ATS record 2025-26 NBA'
+
+Fuentes: rotowire.com, nba.com/stats, nbastuffer.com, espn.com/nba, teamrankings.com
+
+Formato de respuesta usando árbol ├── └──:
+
+📋 SECCIÓN B — ESTADÍSTICAS AVANZADAS NBA
+
+1. STATS AVANZADAS 2025/2026
+   ├── [Local] oRTG: [X.X] | dRTG: [X.X] | NetRTG: [X.X] | Pace: [X.X]
+   └── [Visitante] oRTG: [X.X] | dRTG: [X.X] | NetRTG: [X.X] | Pace: [X.X]
+
+2. LESIONADOS Y DOUBTFUL
+   ├── Local: [jugador] - [estado] - [fuente]
+   └── Visitante: [jugador] - [estado] - [fuente]
+
+3. TENDENCIAS DE APUESTAS
+   ├── [Local] Over/Under record: [XX-XX]
+   └── [Visitante] ATS record: [XX-XX]
+
+4. PROMEDIOS DE PUNTOS
+   ├── Local PPG: [X.X] | Puntos permitidos: [X.X]
+   └── Visitante PPG: [X.X] | Puntos permitidos: [X.X]
+
+NUNCA escribir xG, corners, BTTS (eso es fútbol).`;
+
 const CORNERS_SYSTEM_PROMPT = `Eres un extractor de datos deportivos especializado.
 Tu única tarea es encontrar estadísticas de corners.
 Devuelve SOLO JSON válido, sin texto adicional, sin markdown, sin explicaciones.
 Si no encuentras un dato, usa null como valor.
 El JSON debe ser parseable por JSON.parse() directamente.`;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// SELECTOR DE PROMPTS POR DEPORTE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function getGeminiPrompt(sport) {
+  if (sport === 'basketball') {
+    return GEMINI_SYSTEM_PROMPT_NBA;
+  }
+  // Default: Fútbol (NO TOCAR)
+  return GEMINI_SYSTEM_PROMPT_FOOTBALL;
+}
+
+function getSonarPrompt(sport) {
+  if (sport === 'basketball') {
+    return SONAR_SYSTEM_PROMPT_NBA;
+  }
+  // Default: Fútbol (NO TOCAR)
+  return SONAR_SYSTEM_PROMPT_FOOTBALL;
+}
+
 async function runParallelResearch(matchName, sport, openrouterKey) {
   console.log('\n📡 STEP 2: Investigación paralela (Gemini + Sonar Pro + Corners)...');
+  console.log(`🏈 Deporte detectado en research: ${sport}`);
+  
+  // Seleccionar prompts según deporte
+  const geminiPrompt = getGeminiPrompt(sport);
+  const sonarPrompt = getSonarPrompt(sport);
+  console.log(`📋 Usando prompts: ${sport === 'basketball' ? 'NBA' : 'Fútbol'}`);
   
   const teams = matchName.split(/\s+vs\s+|\s+v\s+|\s*-vs-\s*|\s*-v-\s*/i);
   const homeTeam = teams[0]?.trim() || '';
@@ -336,7 +455,7 @@ async function runParallelResearch(matchName, sport, openrouterKey) {
           max_tokens: 2000,
           temperature: 0.1,
           messages: [
-            { role: "system", content: GEMINI_SYSTEM_PROMPT },
+            { role: "system", content: geminiPrompt },
             { role: "user", content: `Busca en tiempo real el partido: ${matchName}\nDeporte: ${sport}. Fecha: Marzo 2026.\nResponde SOLO en español con la estructura pedida.` }
           ]
         })
@@ -356,7 +475,7 @@ async function runParallelResearch(matchName, sport, openrouterKey) {
           max_tokens: 1500,
           temperature: 0.1,
           messages: [
-            { role: "system", content: SONAR_SYSTEM_PROMPT },
+            { role: "system", content: sonarPrompt },
             { role: "user", content: `Investiga estadísticas avanzadas y lesiones para: ${matchName}\nDeporte: ${sport}. Fecha: Marzo 2026.\nResponde SOLO en español con la estructura pedida.` }
           ]
         })
@@ -364,8 +483,8 @@ async function runParallelResearch(matchName, sport, openrouterKey) {
         .then(r => r.choices?.[0]?.message?.content ?? "Sin datos estadísticos")
         .catch(() => "Sin datos estadísticos (error Sonar Pro)"),
 
-      // STEP 2C: Sonar Pro DEDICADO A CORNERS (JSON exclusivo)
-      fetch("https://openrouter.ai/api/v1/chat/completions", {
+      // STEP 2C: Sonar Pro DEDICADO A CORNERS (solo fútbol, JSON exclusivo)
+      sport === 'football' ? fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${openrouterKey}`,
@@ -427,7 +546,16 @@ Responde SOLO con este formato JSON (sin markdown):
           tendencia: 'Sin datos',
           fuente: null,
           raw_response: 'Error en llamada corners'
-        }))
+        })) : Promise.resolve({
+          // Para NBA, no buscar corners
+          corners_local_casa: null,
+          corners_visitante_fuera: null,
+          suma_estimada: null,
+          linea_recomendada: null,
+          tendencia: 'No aplica (NBA)',
+          fuente: null,
+          raw_response: 'Corners no disponible para NBA'
+        })
 
     ]);
 
