@@ -1,6 +1,38 @@
 # Coco VIP - Work Log
 
 ---
+Task ID: 8
+Agent: Main Agent
+Task: FIX - Prompts dinámicos por deporte en API + Supabase error handling
+
+Work Log:
+- FIX 1: Template Sección B NBA
+  - `parseNBAReport()` ahora parsea oRTG, dRTG, Pace, NetRTG del texto
+  - `analyzeNBA()` añade `teams_stats` y `nbaStats` al resultado
+  - Frontend `NBAStatsSection` ya existe y muestra stats condicionalmente
+- FIX 2: Gemini fallback automático
+  - Si respuesta vacía o < 50 chars, reintenta con query alternativa
+  - Fallback usa basketball-reference.com, nba.com/stats
+  - Nunca devuelve "Sin datos de contexto" sin intentar 2 veces
+- FIX 3: Supabase insert condicional
+  - Spread operator condicional por deporte
+  - NBA fields solo si basketball, Football fields solo si football
+  - Log detallado de error con código, mensaje, hint, datos enviados
+- FIX RAÍZ: Variable deporte NO se usaba en los prompts
+  - Creados prompts separados: GEMINI_SYSTEM_PROMPT_FOOTBALL y _NBA
+  - Creados prompts separados: SONAR_SYSTEM_PROMPT_FOOTBALL y _NBA
+  - Funciones selectoras: getGeminiPrompt(sport), getSonarPrompt(sport)
+  - Corners solo se busca si sport === 'football'
+- Commits: 81f5d04, 90b6545
+
+Stage Summary:
+- El deporte seleccionado por usuario AHORA llega a los modelos
+- NBA: queries a ESPN, NBA.com, basketball-reference
+- Fútbol: queries sin cambios (NO TOCADO)
+- Template visual condicional funcionando
+- Supabase con mejor manejo de errores
+
+---
 Task ID: 7
 Agent: Main Agent
 Task: Corregir pipeline NBA con prompts específicos y reglas de probabilidad
